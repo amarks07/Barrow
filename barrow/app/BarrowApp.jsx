@@ -18,7 +18,7 @@ import { useTemplateActions } from "../hooks/useTemplateActions";
 import { useExerciseActions } from "../hooks/useExerciseActions";
 import { useTabSwipe } from "../hooks/useTabSwipe";
 
-import { SEED_EXERCISES } from "../lib/constants";
+import { SEED_EXERCISES, reconcileExercises } from "../lib/constants";
 import { toKey } from "../lib/date";
 
 const TABS = [
@@ -28,9 +28,10 @@ const TABS = [
 ];
 
 const RAW_UNIT_CODEC = { serialize: (v) => v, deserialize: (v) => v };
+const EXERCISES_CODEC = { deserialize: (raw) => reconcileExercises(JSON.parse(raw)) };
 
 export default function BarrowApp() {
-  const [exercises, setExercises] = usePersistedState("barrow:exercises", SEED_EXERCISES);
+  const [exercises, setExercises] = usePersistedState("barrow:exercises", SEED_EXERCISES, EXERCISES_CODEC);
   const [templates, setTemplates] = usePersistedState("barrow:templates", []);
   const [workouts, setWorkouts] = usePersistedState("barrow:workouts", {});
   const [unit, setUnit] = usePersistedState("barrow:unit", "lb", RAW_UNIT_CODEC);
@@ -60,7 +61,7 @@ export default function BarrowApp() {
   const view = historyExId ? "history" : selectedDate ? "day" : selectedTemplateId ? "templateDetail" : tab;
   const showChrome = view !== "day" && view !== "history" && view !== "templateDetail";
 
-  const workoutActions = useWorkoutActions({ selectedDate, setWorkouts, templates, unit, nextId });
+  const workoutActions = useWorkoutActions({ selectedDate, setWorkouts, templates, exercises, unit, nextId });
   const templateActions = useTemplateActions({ setTemplates, setWorkouts, setSelectedTemplateId, workouts });
   const exerciseActions = useExerciseActions({ setExercises });
   const tabSwipe = useTabSwipe({ enabled: showChrome, tabs: TABS, activeTab: tab, onChangeTab: setTab });

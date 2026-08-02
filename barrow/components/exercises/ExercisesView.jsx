@@ -63,7 +63,7 @@ export function ExercisesView({ exercises, exerciseView, setExerciseView, onOpen
       {showAdd && (
         <AddCustomExerciseModal
           onClose={() => setShowAdd(false)}
-          onSave={(name, category) => { onAddCustom(name, category); setShowAdd(false); }}
+          onSave={(name, category, muscle) => { onAddCustom(name, category, muscle); setShowAdd(false); }}
         />
       )}
     </div>

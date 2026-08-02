@@ -7,6 +7,7 @@ import { VolumeChart } from "./VolumeChart";
 import { shortDayLabel } from "../../lib/date";
 import { convertSpeed, convertWeight, fmtNum } from "../../lib/units";
 import { getCardioDistanceSeries, getVolumeSeries } from "../../lib/analytics";
+import { exerciseMeta } from "../../lib/exercise-meta";
 
 export function HistoryView({ exercise, workouts, unit, onBack }) {
   const isCardio = exercise.category === "Cardio";
@@ -33,7 +34,7 @@ export function HistoryView({ exercise, workouts, unit, onBack }) {
         <IconBtn label="Back" onClick={onBack}><ArrowLeft size={17} /></IconBtn>
         <div>
           <h3 className="display text-[19px]" style={{ color: "var(--text)" }}>{exercise.name}</h3>
-          <div className="text-[11px]" style={{ color: "var(--text-dim)" }}>{exercise.category}</div>
+          <div className="text-[11px]" style={{ color: "var(--text-dim)" }}>{exerciseMeta(exercise)}</div>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-3">

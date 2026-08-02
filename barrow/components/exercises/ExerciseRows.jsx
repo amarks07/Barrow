@@ -1,6 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
+import { exerciseMeta } from "../../lib/exercise-meta";
 
 export function ExerciseRows({ items, onPick, alreadyPicked }) {
   return (
@@ -22,7 +23,7 @@ export function ExerciseRows({ items, onPick, alreadyPicked }) {
             }}
           >
             <div className="text-[13px] font-medium leading-snug pr-4" style={{ color: "var(--text)" }}>{ex.name}</div>
-            <div className="text-[10px] mt-1" style={{ color: "var(--text-dim)" }}>{ex.category}{ex.custom ? " · custom" : ""}</div>
+            <div className="text-[10px] mt-1" style={{ color: "var(--text-dim)" }}>{exerciseMeta(ex)}</div>
             {picked && <Check size={13} color="var(--accent)" style={{ position: "absolute", top: 10, right: 10 }} />}
           </button>
         );

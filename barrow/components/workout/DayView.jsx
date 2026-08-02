@@ -4,17 +4,19 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, ChevronRight, X } from "lucide-react";
 import { IconBtn } from "../ui/IconBtn";
 import { ConfirmDeleteButton } from "../ui/ConfirmDeleteButton";
+import { ColorSwitch } from "../ui/ColorSwitch";
 import { ExercisePicker } from "../exercises/ExercisePicker";
 import { SetCounters } from "./SetCounters";
 import { SaveAsTemplateModal } from "./SaveAsTemplateModal";
 import { dayLabel } from "../../lib/date";
 import { convertSpeed, convertWeight, fmtNum } from "../../lib/units";
 import { getRecommendation, getRepRange } from "../../lib/analytics";
+import { exerciseMeta } from "../../lib/exercise-meta";
 
 export function DayView({
   dateKey, workout, exercises, templates, unit, workouts,
   onBack, onRename, onAddExercise, onRemoveExercise, onSwapExercise,
-  onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory, onSaveAsTemplate,
+  onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory, onSaveAsTemplate, onSetAngle,
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -90,12 +92,22 @@ export function DayView({
                     color="var(--text-dim)"
                     style={{ flexShrink: 0, transition: "transform 0.15s", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)" }}
                   />
-                  <span className="text-[14px] font-medium truncate" style={{ color: "var(--text)" }}>{ex.name}</span>
-                  {!isOpen && entry.sets.length > 0 && (
-                    <span className="text-[11px] flex-shrink-0" style={{ color: "var(--text-dim)" }}>
-                      · {entry.sets.length} set{entry.sets.length > 1 ? "s" : ""}
-                    </span>
-                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-[14px] font-medium truncate" style={{ color: "var(--text)" }}>{ex.name}</span>
+                      {ex.angles && (
+                        <span className="text-[11px] flex-shrink-0" style={{ color: "var(--accent)" }}>
+                          · {entry.angle || ex.angles[0]}
+                        </span>
+                      )}
+                      {!isOpen && entry.sets.length > 0 && (
+                        <span className="text-[11px] flex-shrink-0" style={{ color: "var(--text-dim)" }}>
+                          · {entry.sets.length} set{entry.sets.length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] truncate" style={{ color: "var(--text-dim)" }}>{exerciseMeta(ex)}</div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button
@@ -122,6 +134,16 @@ export function DayView({
 
               {isOpen && (
                 <div className="mt-3">
+                  {ex.angles && (
+                    <div className="mb-3">
+                      <ColorSwitch
+                        value={entry.angle || ex.angles[0]}
+                        onChange={(angle) => onSetAngle(entry.exerciseId, angle)}
+                        options={ex.angles.map((a) => ({ value: a, label: a }))}
+                      />
+                    </div>
+                  )}
+
                   {entry.sets.length === 0 && rec && (
                     <div className="text-[11px] mb-3" style={{ color: "var(--text-dim)" }}>
                       Last: {fmtNum(rec.lastWeight)} {unit} × {fmtNum(rec.lastReps)} · {rec.note}

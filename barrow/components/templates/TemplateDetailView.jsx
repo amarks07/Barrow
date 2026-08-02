@@ -6,6 +6,7 @@ import { IconBtn } from "../ui/IconBtn";
 import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
 import { ExercisePicker } from "../exercises/ExercisePicker";
 import { shortDayLabel } from "../../lib/date";
+import { exerciseMeta } from "../../lib/exercise-meta";
 
 export function TemplateDetailView({ template, exercises, workouts, onBack, onDelete, onSelectDate, onAddExercise, onRemoveExercise }) {
   const [showPicker, setShowPicker] = useState(false);
@@ -40,7 +41,7 @@ export function TemplateDetailView({ template, exercises, workouts, onBack, onDe
             {template.exerciseIds.map((id) => exMap[id]).filter(Boolean).map((ex) => (
               <div key={ex.id} className="card p-3 relative">
                 <div className="text-[13px] font-medium leading-snug pr-4" style={{ color: "var(--text)" }}>{ex.name}</div>
-                <div className="text-[10px] mt-1" style={{ color: "var(--text-dim)" }}>{ex.category}</div>
+                <div className="text-[10px] mt-1" style={{ color: "var(--text-dim)" }}>{exerciseMeta(ex)}</div>
                 <button
                   onClick={() => onRemoveExercise(template.id, ex.id)}
                   aria-label={`Remove ${ex.name} from template`}
