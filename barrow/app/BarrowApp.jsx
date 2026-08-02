@@ -11,14 +11,36 @@ const CATEGORIES = ["Chest","Back","Legs","Shoulders","Arms","Core","Cardio","Fu
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 const RAW_EXERCISES = [
-  ["Bench Press","Chest"],["Incline Dumbbell Press","Chest"],["Push-Up","Chest"],["Cable Fly","Chest"],
-  ["Deadlift","Back"],["Barbell Row","Back"],["Lat Pulldown","Back"],["Pull-Up","Back"],
-  ["Back Squat","Legs"],["Leg Press","Legs"],["Romanian Deadlift","Legs"],["Walking Lunge","Legs"],["Leg Curl","Legs"],
-  ["Overhead Press","Shoulders"],["Lateral Raise","Shoulders"],["Face Pull","Shoulders"],
-  ["Barbell Curl","Arms"],["Tricep Pushdown","Arms"],["Hammer Curl","Arms"],["Skull Crusher","Arms"],
-  ["Plank","Core"],["Hanging Leg Raise","Core"],["Cable Crunch","Core"],
-  ["Treadmill Run","Cardio"],["Rowing Machine","Cardio"],["Assault Bike","Cardio"],
-  ["Kettlebell Swing","Full Body"],["Clean and Jerk","Full Body"],["Burpee","Full Body"],
+  ["Bench Press","Chest"],["Incline Bench Press","Chest"],["Decline Bench Press","Chest"],
+  ["Incline Dumbbell Press","Chest"],["Decline Dumbbell Press","Chest"],["Dumbbell Bench Press","Chest"],
+  ["Push-Up","Chest"],["Cable Fly","Chest"],["Pec Deck","Chest"],["Chest Dip","Chest"],
+  ["Machine Chest Press","Chest"],["Dumbbell Pullover","Chest"],
+  ["Deadlift","Back"],["Sumo Deadlift","Back"],["Rack Pull","Back"],["Barbell Row","Back"],
+  ["Pendlay Row","Back"],["T-Bar Row","Back"],["Seated Cable Row","Back"],["Lat Pulldown","Back"],
+  ["Pull-Up","Back"],["Chin-Up","Back"],["Single-Arm Dumbbell Row","Back"],["Straight-Arm Pulldown","Back"],
+  ["Back Extension","Back"],["Shrug","Back"],
+  ["Back Squat","Legs"],["Front Squat","Legs"],["Goblet Squat","Legs"],["Hack Squat","Legs"],
+  ["Leg Press","Legs"],["Romanian Deadlift","Legs"],["Stiff-Leg Deadlift","Legs"],["Walking Lunge","Legs"],
+  ["Reverse Lunge","Legs"],["Bulgarian Split Squat","Legs"],["Leg Curl","Legs"],["Leg Extension","Legs"],
+  ["Hip Thrust","Legs"],["Glute Bridge","Legs"],["Calf Raise","Legs"],["Seated Calf Raise","Legs"],
+  ["Step-Up","Legs"],["Sissy Squat","Legs"],["Hip Adductor Machine","Legs"],["Hip Abductor Machine","Legs"],
+  ["Overhead Press","Shoulders"],["Seated Dumbbell Press","Shoulders"],["Arnold Press","Shoulders"],
+  ["Lateral Raise","Shoulders"],["Cable Lateral Raise","Shoulders"],["Front Raise","Shoulders"],
+  ["Rear Delt Fly","Shoulders"],["Face Pull","Shoulders"],["Upright Row","Shoulders"],
+  ["Shoulder Press Machine","Shoulders"],["Landmine Press","Shoulders"],
+  ["Barbell Curl","Arms"],["EZ-Bar Curl","Arms"],["Dumbbell Curl","Arms"],["Hammer Curl","Arms"],
+  ["Preacher Curl","Arms"],["Concentration Curl","Arms"],["Cable Curl","Arms"],["Tricep Pushdown","Arms"],
+  ["Overhead Tricep Extension","Arms"],["Skull Crusher","Arms"],["Close-Grip Bench Press","Arms"],
+  ["Tricep Dip","Arms"],["Cable Kickback","Arms"],
+  ["Plank","Core"],["Side Plank","Core"],["Hanging Leg Raise","Core"],["Cable Crunch","Core"],
+  ["Sit-Up","Core"],["Crunch","Core"],["Russian Twist","Core"],["Bicycle Crunch","Core"],
+  ["Ab Wheel Rollout","Core"],["Mountain Climber","Core"],["Woodchopper","Core"],["Dead Bug","Core"],["V-Up","Core"],
+  ["Treadmill Run","Cardio"],["Treadmill Incline Walk","Cardio"],["Rowing Machine","Cardio"],
+  ["Assault Bike","Cardio"],["Stationary Bike","Cardio"],["Elliptical","Cardio"],["Stair Climber","Cardio"],
+  ["Jump Rope","Cardio"],["Swimming","Cardio"],["Sprint Intervals","Cardio"],
+  ["Kettlebell Swing","Full Body"],["Clean and Jerk","Full Body"],["Snatch","Full Body"],["Burpee","Full Body"],
+  ["Thruster","Full Body"],["Man Maker","Full Body"],["Turkish Get-Up","Full Body"],
+  ["Farmer's Carry","Full Body"],["Wall Ball","Full Body"],["Battle Ropes","Full Body"],
 ];
 
 const SEED_EXERCISES = RAW_EXERCISES.map(([name, category]) => ({
@@ -64,6 +86,18 @@ function convertWeight(value, fromUnit, toUnit) {
   if (Number.isNaN(num)) return "";
   if (!fromUnit || fromUnit === toUnit) return num;
   const converted = fromUnit === "kg" ? num * LB_PER_KG : num / LB_PER_KG;
+  return roundHalf(converted);
+}
+
+const KMH_PER_MPH = 1.60934;
+// Cardio speed reuses the same lb/kg toggle as an imperial/metric preference:
+// "lb" system displays mph, "kg" system displays km/h.
+function convertSpeed(value, fromUnit, toUnit) {
+  if (value === "" || value === null || value === undefined) return "";
+  const num = parseFloat(value);
+  if (Number.isNaN(num)) return "";
+  if (!fromUnit || fromUnit === toUnit) return num;
+  const converted = fromUnit === "kg" ? num * KMH_PER_MPH : num / KMH_PER_MPH;
   return roundHalf(converted);
 }
 
@@ -139,6 +173,26 @@ function getVolumeSeries(exerciseId, workouts, unit) {
       volume += wNum * reps;
     });
     rows.push({ dateKey, volume });
+  });
+  rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
+  return rows.slice(-10);
+}
+
+// Cardio equivalent: total distance (time × speed) per session, most recent
+// 10 sessions — the closest thing cardio has to "volume".
+function getCardioDistanceSeries(exerciseId, workouts, unit) {
+  const rows = [];
+  Object.entries(workouts).forEach(([dateKey, w]) => {
+    const entry = w.entries.find((e) => e.exerciseId === exerciseId);
+    if (!entry || entry.sets.length === 0) return;
+    let distance = 0;
+    entry.sets.forEach((s) => {
+      const speedConv = convertSpeed(s.speed, s.unit, unit);
+      const speedNum = speedConv === "" ? 0 : speedConv;
+      const timeMin = parseFloat(s.time) || 0;
+      distance += (timeMin / 60) * speedNum;
+    });
+    rows.push({ dateKey, volume: distance });
   });
   rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
   return rows.slice(-10);
@@ -474,32 +528,12 @@ function Counter({ label, value, onInc, onDec, onChange, plusButtons }) {
   );
 }
 
-function SetCounters({ index, set, unit, onUpdate, onRemove }) {
-  const weightStep = unit === "kg" ? 2.5 : 5;
-  const reps = parseFloat(set.reps) || 0;
-  const weight = convertWeight(set.weight, set.unit, unit) || 0;
-
+function SetCounters({ index, set, unit, isCardio, onUpdate, onRemove }) {
   return (
     <div className="mb-4">
       <div className="display text-[14px] uppercase mb-2" style={{ color: "var(--text-dim)" }}>Set {index + 1}</div>
       <div className="flex flex-col gap-2">
-        <Counter
-          label="REPS"
-          value={reps}
-          onChange={(e) => onUpdate("reps", e.target.value)}
-          onDec={() => onUpdate("reps", roundHalf(Math.max(0, reps - 0.5)))}
-          plusButtons={[
-            { label: "+1", onClick: () => onUpdate("reps", roundHalf(reps + 1)) },
-            { label: "+.5", onClick: () => onUpdate("reps", roundHalf(reps + 0.5)) },
-          ]}
-        />
-        <Counter
-          label={unit.toUpperCase()}
-          value={weight}
-          onChange={(e) => onUpdate("weight", e.target.value)}
-          onInc={() => onUpdate("weight", roundHalf(weight + weightStep))}
-          onDec={() => onUpdate("weight", roundHalf(Math.max(0, weight - weightStep)))}
-        />
+        {isCardio ? <CardioFields set={set} unit={unit} onUpdate={onUpdate} /> : <StrengthFields set={set} unit={unit} onUpdate={onUpdate} />}
       </div>
       <button
         onClick={onRemove}
@@ -512,18 +546,77 @@ function SetCounters({ index, set, unit, onUpdate, onRemove }) {
   );
 }
 
+function StrengthFields({ set, unit, onUpdate }) {
+  const weightStep = unit === "kg" ? 2.5 : 5;
+  const reps = parseFloat(set.reps) || 0;
+  const weight = convertWeight(set.weight, set.unit, unit) || 0;
+
+  return (
+    <>
+      <Counter
+        label={unit.toUpperCase()}
+        value={weight}
+        onChange={(e) => onUpdate("weight", e.target.value)}
+        onInc={() => onUpdate("weight", roundHalf(weight + weightStep))}
+        onDec={() => onUpdate("weight", roundHalf(Math.max(0, weight - weightStep)))}
+      />
+      <Counter
+        label="REPS"
+        value={reps}
+        onChange={(e) => onUpdate("reps", e.target.value)}
+        onDec={() => onUpdate("reps", roundHalf(Math.max(0, reps - 0.5)))}
+        plusButtons={[
+          { label: "+1", onClick: () => onUpdate("reps", roundHalf(reps + 1)) },
+          { label: "+.5", onClick: () => onUpdate("reps", roundHalf(reps + 0.5)) },
+        ]}
+      />
+    </>
+  );
+}
+
+function CardioFields({ set, unit, onUpdate }) {
+  const speedStep = unit === "kg" ? 1 : 0.5;
+  const time = parseFloat(set.time) || 0;
+  const speed = convertSpeed(set.speed, set.unit, unit) || 0;
+  const speedLabel = unit === "kg" ? "KM/H" : "MPH";
+
+  return (
+    <>
+      <Counter
+        label="MIN"
+        value={time}
+        onChange={(e) => onUpdate("time", e.target.value)}
+        onDec={() => onUpdate("time", roundHalf(Math.max(0, time - 1)))}
+        plusButtons={[
+          { label: "+5", onClick: () => onUpdate("time", roundHalf(time + 5)) },
+          { label: "+1", onClick: () => onUpdate("time", roundHalf(time + 1)) },
+        ]}
+      />
+      <Counter
+        label={speedLabel}
+        value={speed}
+        onChange={(e) => onUpdate("speed", e.target.value)}
+        onInc={() => onUpdate("speed", roundHalf(speed + speedStep))}
+        onDec={() => onUpdate("speed", roundHalf(Math.max(0, speed - speedStep)))}
+      />
+    </>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Day / workout log view                                               */
 /* ------------------------------------------------------------------ */
 function DayView({
   dateKey, workout, exercises, templates, unit, workouts,
   onBack, onRename, onAddExercise, onRemoveExercise, onSwapExercise,
-  onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory,
+  onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory, onSaveAsTemplate,
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [swapExId, setSwapExId] = useState(null);
   const entries = workout ? workout.entries : [];
+  const usedTemplate = (workout?.templateIds || []).length > 0;
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
 
   return (
@@ -539,6 +632,15 @@ function DayView({
           />
           <div className="text-[11px]" style={{ color: "var(--text-dim)" }}>{dayLabel(dateKey)}</div>
         </div>
+        {entries.length > 0 && !usedTemplate && (
+          <button
+            onClick={() => setShowSaveTemplate(true)}
+            className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full flex-shrink-0"
+            style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
+          >
+            Save as template
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-3" style={{ paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}>
@@ -550,13 +652,20 @@ function DayView({
         {entries.map((entry) => {
           const ex = exMap[entry.exerciseId];
           if (!ex) return null;
+          const isCardio = ex.category === "Cardio";
           const lastSet = entry.sets[entry.sets.length - 1];
           const { repLow, repHigh } = getRepRange(entry.exerciseId, workouts, dateKey);
-          const rec = entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, dateKey, repLow, repHigh) : null;
+          const rec = !isCardio && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, dateKey, repLow, repHigh) : null;
+          const speedLabel = unit === "kg" ? "km/h" : "mph";
           // Tapping "Add set" always does the sensible thing: repeat your last
           // set's numbers if you've already logged one today, otherwise start
-          // from the suggested weight/reps if we have history, otherwise blank.
-          const prefill = lastSet
+          // from the suggested weight/reps if we have history (strength only),
+          // otherwise blank.
+          const prefill = isCardio
+            ? lastSet
+              ? { time: lastSet.time, speed: convertSpeed(lastSet.speed, lastSet.unit, unit) }
+              : null
+            : lastSet
             ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
             : rec
             ? { reps: rec.recReps, weight: rec.recWeight }
@@ -598,6 +707,7 @@ function DayView({
                   index={i}
                   set={set}
                   unit={unit}
+                  isCardio={isCardio}
                   onUpdate={(field, value) => onUpdateSet(entry.exerciseId, set.id, field, value)}
                   onRemove={() => onRemoveSet(entry.exerciseId, set.id)}
                 />
@@ -608,7 +718,11 @@ function DayView({
                 className="w-full mt-2 py-2.5 rounded-full text-[13px] font-semibold text-center"
                 style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
               >
-                {entry.sets.length === 0 && prefill ? `+ Add set · ${fmtNum(prefill.reps)} × ${fmtNum(prefill.weight)} ${unit}` : "+ Add set"}
+                {entry.sets.length === 0 && prefill
+                  ? isCardio
+                    ? `+ Add set · ${fmtNum(prefill.time)} min @ ${fmtNum(prefill.speed)} ${speedLabel}`
+                    : `+ Add set · ${fmtNum(prefill.reps)} × ${fmtNum(prefill.weight)} ${unit}`
+                  : "+ Add set"}
               </button>
             </div>
           );
@@ -659,6 +773,13 @@ function DayView({
           alreadyPicked={entries.map((e) => e.exerciseId).filter((id) => id !== swapExId)}
           onPick={(ex) => { onSwapExercise(swapExId, ex.id); setSwapExId(null); }}
           onClose={() => setSwapExId(null)}
+        />
+      )}
+
+      {showSaveTemplate && (
+        <SaveAsTemplateModal
+          onClose={() => setShowSaveTemplate(false)}
+          onSave={(name) => { onSaveAsTemplate(dateKey, name); setShowSaveTemplate(false); }}
         />
       )}
 
@@ -819,6 +940,33 @@ function AddCustomExerciseModal({ onClose, onSave }) {
           <button onClick={onClose} className="text-[13px]" style={{ color: "var(--text-dim)" }}>Cancel</button>
           <button
             onClick={() => name.trim() && onSave(name.trim(), category)}
+            className="text-[13px] font-semibold"
+            style={{ color: "var(--text)" }}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SaveAsTemplateModal({ onClose, onSave }) {
+  const [name, setName] = useState("");
+  return (
+    <div className="absolute inset-0 z-40 flex items-end" style={{ background: "rgba(0,0,0,0.3)" }}>
+      <div className="w-full p-5" style={{ background: "var(--bg)", borderTop: "1.5px solid var(--line)", paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+        <h3 className="display text-[19px] mb-1" style={{ color: "var(--text)" }}>Save as template</h3>
+        <p className="text-[12px] mb-4" style={{ color: "var(--text-dim)" }}>Saves today's exercise list so you can pull it into any workout later.</p>
+        <input
+          value={name} onChange={(e) => setName(e.target.value)} placeholder="Template name (e.g. Push Day)" autoFocus
+          className="w-full text-[16px] outline-none py-1.5 mb-4"
+          style={{ background: "transparent", color: "var(--text)", borderBottom: "1px solid var(--line-strong)" }}
+        />
+        <div className="flex items-center justify-between">
+          <button onClick={onClose} className="text-[13px]" style={{ color: "var(--text-dim)" }}>Cancel</button>
+          <button
+            onClick={() => name.trim() && onSave(name.trim())}
             className="text-[13px] font-semibold"
             style={{ color: "var(--text)" }}
           >
@@ -1064,6 +1212,10 @@ function VolumeChart({ data, unit }) {
 /* Exercise history view                                                 */
 /* ------------------------------------------------------------------ */
 function HistoryView({ exercise, workouts, unit, onBack }) {
+  const isCardio = exercise.category === "Cardio";
+  const speedLabel = unit === "kg" ? "km/h" : "mph";
+  const distanceLabel = unit === "kg" ? "km" : "mi";
+
   const records = useMemo(() => {
     const out = [];
     Object.entries(workouts).forEach(([dateKey, w]) => {
@@ -1073,7 +1225,10 @@ function HistoryView({ exercise, workouts, unit, onBack }) {
     return out.sort((a, b) => (a.dateKey < b.dateKey ? 1 : -1));
   }, [workouts, exercise]);
 
-  const volumeSeries = useMemo(() => getVolumeSeries(exercise.id, workouts, unit), [workouts, exercise, unit]);
+  const volumeSeries = useMemo(
+    () => (isCardio ? getCardioDistanceSeries(exercise.id, workouts, unit) : getVolumeSeries(exercise.id, workouts, unit)),
+    [workouts, exercise, unit, isCardio]
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -1088,7 +1243,7 @@ function HistoryView({ exercise, workouts, unit, onBack }) {
         {volumeSeries.length > 0 && (
           <div className="mb-5">
             <div className="display text-[13px] mb-1 uppercase" style={{ color: "var(--text-dim)" }}>
-              Volume · last {volumeSeries.length} session{volumeSeries.length > 1 ? "s" : ""}
+              {isCardio ? `Distance (${distanceLabel})` : "Volume"} · last {volumeSeries.length} session{volumeSeries.length > 1 ? "s" : ""}
             </div>
             <VolumeChart data={volumeSeries} unit={unit} />
           </div>
@@ -1105,7 +1260,11 @@ function HistoryView({ exercise, workouts, unit, onBack }) {
               {sets.map((s, i) => (
                 <div key={s.id} className="flex items-center justify-between text-[13px] tabular py-0.5" style={{ color: "var(--text)" }}>
                   <span className="display text-[14px] uppercase" style={{ color: "var(--text-dim)" }}>Set {i + 1}</span>
-                  <span>{fmtNum(parseFloat(s.reps) || 0)} reps × {fmtNum(convertWeight(s.weight, s.unit, unit))} {unit}</span>
+                  {isCardio ? (
+                    <span>{fmtNum(parseFloat(s.time) || 0)} min @ {fmtNum(convertSpeed(s.speed, s.unit, unit))} {speedLabel}</span>
+                  ) : (
+                    <span>{fmtNum(parseFloat(s.reps) || 0)} reps × {fmtNum(convertWeight(s.weight, s.unit, unit))} {unit}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -1307,7 +1466,20 @@ export default function WorkoutTrackerApp() {
         ...w,
         entries: w.entries.map((e) =>
           e.exerciseId === exId
-            ? { ...e, sets: [...e.sets, { id: nextId(), reps: preset ? preset.reps : "", weight: preset ? preset.weight : "", unit }] }
+            ? {
+                ...e,
+                sets: [
+                  ...e.sets,
+                  {
+                    id: nextId(),
+                    reps: preset?.reps ?? "",
+                    weight: preset?.weight ?? "",
+                    time: preset?.time ?? "",
+                    speed: preset?.speed ?? "",
+                    unit,
+                  },
+                ],
+              }
             : e
         ),
       })),
@@ -1319,7 +1491,11 @@ export default function WorkoutTrackerApp() {
             ? {
                 ...e,
                 sets: e.sets.map((s) =>
-                  s.id === setId ? (field === "weight" ? { ...s, weight: value, unit } : { ...s, [field]: value }) : s
+                  s.id === setId
+                    ? field === "weight" || field === "speed"
+                      ? { ...s, [field]: value, unit }
+                      : { ...s, [field]: value }
+                    : s
                 ),
               }
             : e
@@ -1350,6 +1526,18 @@ export default function WorkoutTrackerApp() {
 
   const createTemplate = (name, exerciseIds) => {
     setTemplates((prev) => [...prev, { id: `tpl-${Date.now()}`, name, exerciseIds }]);
+  };
+  // Turns a day's already-logged exercises into a reusable template — only
+  // relevant when that day wasn't built from a template in the first place.
+  const saveWorkoutAsTemplate = (dateKey, name) => {
+    const workout = workouts[dateKey];
+    if (!workout || workout.entries.length === 0) return;
+    const newTplId = `tpl-${Date.now()}`;
+    setTemplates((prev) => [...prev, { id: newTplId, name, exerciseIds: workout.entries.map((e) => e.exerciseId) }]);
+    setWorkouts((prev) => ({
+      ...prev,
+      [dateKey]: { ...prev[dateKey], templateIds: [...(prev[dateKey].templateIds || []), newTplId] },
+    }));
   };
   const deleteTemplate = (id) => {
     setTemplates((prev) => prev.filter((t) => t.id !== id));
@@ -1450,6 +1638,7 @@ export default function WorkoutTrackerApp() {
               workouts={workouts}
               onBack={() => setSelectedDate(null)}
               onOpenHistory={setHistoryExId}
+              onSaveAsTemplate={saveWorkoutAsTemplate}
               {...handlers}
             />
           )}
