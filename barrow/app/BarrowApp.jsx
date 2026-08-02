@@ -214,6 +214,71 @@ function IconBtn({ onClick, children, label }) {
   );
 }
 
+// Two-step delete: first tap arms it (red, "You sure?"), second tap actually
+// deletes. Auto-disarms after a few seconds if you don't confirm.
+function ConfirmDeleteButton({ onConfirm, label = "Delete", confirmLabel = "You sure?", stopPropagation, className }) {
+  const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    if (!confirming) return undefined;
+    const t = setTimeout(() => setConfirming(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirming]);
+
+  return (
+    <button
+      onClick={(e) => {
+        if (stopPropagation) e.stopPropagation();
+        if (confirming) {
+          setConfirming(false);
+          onConfirm();
+        } else {
+          setConfirming(true);
+        }
+      }}
+      className={className}
+      style={{
+        background: confirming ? "var(--danger)" : "var(--surface)",
+        color: confirming ? "#FFFFFF" : "var(--text-dim)",
+        border: confirming ? "1.5px solid var(--danger)" : "1.5px solid var(--line-strong)",
+      }}
+    >
+      {confirming ? confirmLabel : label}
+    </button>
+  );
+}
+
+// Compact icon-only variant of ConfirmDeleteButton, for tight spots (like
+// the exercise grid tile) where a text label wouldn't fit.
+function ConfirmDeleteIconButton({ onConfirm, size = 12, className, style, ariaLabel }) {
+  const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    if (!confirming) return undefined;
+    const t = setTimeout(() => setConfirming(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirming]);
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation?.();
+        if (confirming) {
+          setConfirming(false);
+          onConfirm();
+        } else {
+          setConfirming(true);
+        }
+      }}
+      aria-label={confirming ? "Confirm delete" : ariaLabel}
+      className={className}
+      style={style}
+    >
+      <Trash2 size={size} color={confirming ? "var(--danger)" : "var(--text-dim)"} />
+    </button>
+  );
+}
+
 function ColorSwitch({ value, options, onChange }) {
   return (
     <div className="flex items-center p-0.5 rounded-full" style={{ background: "var(--surface)", border: "1.5px solid var(--line-strong)" }}>
@@ -710,13 +775,11 @@ function DayView({
                   >
                     Swap
                   </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onRemoveExercise(entry.exerciseId); }}
+                  <ConfirmDeleteButton
+                    onConfirm={() => onRemoveExercise(entry.exerciseId)}
+                    stopPropagation
                     className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
-                    style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
-                  >
-                    Delete
-                  </button>
+                  />
                 </div>
               </div>
 
@@ -852,9 +915,12 @@ function ExerciseTile({ ex, onOpen, onDelete }) {
         <div className="text-[10px] mt-1" style={{ color: "var(--text-dim)" }}>{ex.category}{ex.custom ? " · custom" : ""}</div>
       </button>
       {ex.custom && (
-        <button onClick={() => onDelete(ex.id)} aria-label="Delete custom exercise" className="absolute" style={{ top: 8, right: 8 }}>
-          <Trash2 size={12} color="var(--text-dim)" />
-        </button>
+        <ConfirmDeleteIconButton
+          onConfirm={() => onDelete(ex.id)}
+          ariaLabel="Delete custom exercise"
+          className="absolute"
+          style={{ top: 8, right: 8 }}
+        />
       )}
     </div>
   );
@@ -868,9 +934,11 @@ function ExerciseListRow({ ex, onOpen, onDelete }) {
         <div className="text-[10px] mt-0.5" style={{ color: "var(--text-dim)" }}>{ex.category}{ex.custom ? " · custom" : ""}</div>
       </button>
       {ex.custom && (
-        <button onClick={() => onDelete(ex.id)} aria-label="Delete custom exercise" className="flex-shrink-0">
-          <Trash2 size={13} color="var(--text-dim)" />
-        </button>
+        <ConfirmDeleteButton
+          onConfirm={() => onDelete(ex.id)}
+          stopPropagation
+          className="flex-shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
+        />
       )}
     </div>
   );
@@ -1032,7 +1100,7 @@ function TemplatesView({ templates, exercises, onCreate, onDelete, onOpenTemplat
           <button key={t.id} onClick={() => onOpenTemplate(t.id)} className="text-left card p-4">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[14px] font-medium" style={{ color: "var(--text)" }}>{t.name}</span>
-              <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} aria-label="Delete template"><Trash2 size={14} color="var(--text-dim)" /></button>
+              <ConfirmDeleteIconButton onConfirm={() => onDelete(t.id)} ariaLabel="Delete template" size={14} />
             </div>
             <div className="text-[11px] leading-relaxed" style={{ color: "var(--text-dim)" }}>
               {t.exerciseIds.map((id) => exMap[id]?.name).filter(Boolean).join(" · ")}
@@ -1132,7 +1200,7 @@ function TemplateDetailView({ template, exercises, workouts, onBack, onDelete, o
       <div className="flex items-center gap-3 px-5 pb-4" style={{ borderBottom: "1.5px solid var(--line)", paddingTop: "max(1.25rem, env(safe-area-inset-top))" }}>
         <IconBtn label="Back" onClick={onBack}><ArrowLeft size={17} /></IconBtn>
         <h3 className="display text-[19px] flex-1" style={{ color: "var(--text)" }}>{template.name}</h3>
-        <button onClick={() => onDelete(template.id)} aria-label="Delete template"><Trash2 size={16} color="var(--text-dim)" /></button>
+        <ConfirmDeleteIconButton onConfirm={() => onDelete(template.id)} ariaLabel="Delete template" size={16} />
       </div>
       <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4">
         <div className="flex items-center justify-between mb-2">
