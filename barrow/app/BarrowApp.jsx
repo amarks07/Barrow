@@ -8,7 +8,6 @@ import { CalendarView } from "../components/calendar/CalendarView";
 import { ExercisesView } from "../components/exercises/ExercisesView";
 import { TemplatesView } from "../components/templates/TemplatesView";
 import { TemplateDetailView } from "../components/templates/TemplateDetailView";
-import { TemplateBuilder } from "../components/templates/TemplateBuilder";
 import { DayView } from "../components/workout/DayView";
 import { HistoryView } from "../components/history/HistoryView";
 import { ProfileView } from "../components/profile/ProfileView";
@@ -56,26 +55,15 @@ export default function BarrowApp() {
   const [selectedWorkoutId, setSelectedWorkoutId] = useState(null);
   const [historyExId, setHistoryExId] = useState(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
-  const [creatingTemplate, setCreatingTemplate] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
   const idRef = useRef(0);
   const nextId = () => `s${Date.now()}-${idRef.current++}`;
 
   // History and day view take over the whole screen; template detail sits
-  // "under" a day view so returning from a day drops back into it. Creating
-  // a template is also a full-screen takeover, not a modal over the
-  // templates list — otherwise the bottom tab bar stays visible underneath it.
-  const view = historyExId
-    ? "history"
-    : selectedDate
-    ? "day"
-    : creatingTemplate
-    ? "newTemplate"
-    : selectedTemplateId
-    ? "templateDetail"
-    : tab;
-  const showChrome = !["day", "history", "templateDetail", "newTemplate"].includes(view);
+  // "under" a day view so returning from a day drops back into it.
+  const view = historyExId ? "history" : selectedDate ? "day" : selectedTemplateId ? "templateDetail" : tab;
+  const showChrome = view !== "day" && view !== "history" && view !== "templateDetail";
 
   const workoutActions = useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts, templates, exercises, unit, nextId });
   const dayWorkoutsActions = useDayWorkouts({ setWorkouts, nextId });
@@ -131,18 +119,10 @@ export default function BarrowApp() {
           {view === "templates" && (
             <TemplatesView
               templates={templates}
-              onNewTemplate={() => setCreatingTemplate(true)}
+              exercises={exercises}
+              onCreate={templateActions.createTemplate}
               onDelete={templateActions.deleteTemplate}
               onOpenTemplate={setSelectedTemplateId}
-              exercises={exercises}
-            />
-          )}
-
-          {view === "newTemplate" && (
-            <TemplateBuilder
-              exercises={exercises}
-              onClose={() => setCreatingTemplate(false)}
-              onSave={(name, ids) => { templateActions.createTemplate(name, ids); setCreatingTemplate(false); }}
             />
           )}
 

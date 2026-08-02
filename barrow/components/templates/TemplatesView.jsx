@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
 import { FAB } from "../ui/FAB";
+import { TemplateBuilder } from "./TemplateBuilder";
 
-export function TemplatesView({ templates, exercises, onNewTemplate, onDelete, onOpenTemplate }) {
+export function TemplatesView({ templates, exercises, onCreate, onDelete, onOpenTemplate }) {
+  const [showBuilder, setShowBuilder] = useState(false);
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
 
   return (
@@ -42,7 +44,15 @@ export function TemplatesView({ templates, exercises, onNewTemplate, onDelete, o
         ))}
       </div>
 
-      <FAB label="New template" onClick={onNewTemplate} />
+      <FAB label="New template" onClick={() => setShowBuilder(true)} />
+
+      {showBuilder && (
+        <TemplateBuilder
+          exercises={exercises}
+          onClose={() => setShowBuilder(false)}
+          onSave={(name, ids) => { onCreate(name, ids); setShowBuilder(false); }}
+        />
+      )}
     </div>
   );
 }
