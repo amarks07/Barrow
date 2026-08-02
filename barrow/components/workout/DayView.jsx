@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, ChevronRight, X } from "lucide-react";
 import { IconBtn } from "../ui/IconBtn";
 import { ConfirmDeleteButton } from "../ui/ConfirmDeleteButton";
-import { ColorSwitch } from "../ui/ColorSwitch";
 import { ExercisePicker } from "../exercises/ExercisePicker";
 import { SetCounters } from "./SetCounters";
 import { SaveAsTemplateModal } from "./SaveAsTemplateModal";
+import { AngleToggle } from "./AngleToggle";
 import { dayLabel } from "../../lib/date";
 import { convertSpeed, convertWeight, fmtNum } from "../../lib/units";
 import { getRecommendation, getRepRange } from "../../lib/analytics";
@@ -135,8 +135,8 @@ export function DayView({
               {isOpen && (
                 <div className="mt-3">
                   {ex.angles && (
-                    <div className="mb-3">
-                      <ColorSwitch
+                    <div className="mb-3 flex justify-end">
+                      <AngleToggle
                         value={entry.angle || ex.angles[0]}
                         onChange={(angle) => onSetAngle(entry.exerciseId, angle)}
                         options={ex.angles.map((a) => ({ value: a, label: a }))}
