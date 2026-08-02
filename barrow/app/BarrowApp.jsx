@@ -615,6 +615,7 @@ function DayView({
   const [showTemplates, setShowTemplates] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [swapExId, setSwapExId] = useState(null);
+  const [openExerciseId, setOpenExerciseId] = useState(null);
   const entries = workout ? workout.entries : [];
   const usedTemplate = (workout?.templateIds || []).length > 0;
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
@@ -653,6 +654,7 @@ function DayView({
           const ex = exMap[entry.exerciseId];
           if (!ex) return null;
           const isCardio = ex.category === "Cardio";
+          const isOpen = openExerciseId === entry.exerciseId;
           const lastSet = entry.sets[entry.sets.length - 1];
           const { repLow, repHigh } = getRepRange(entry.exerciseId, workouts, dateKey);
           const rec = !isCardio && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, dateKey, repLow, repHigh) : null;
@@ -673,20 +675,40 @@ function DayView({
 
           return (
             <div key={entry.exerciseId} className="py-4" style={{ borderBottom: "1.5px solid var(--line)" }}>
-              <div className="flex items-center justify-between mb-3">
-                <button onClick={() => onOpenHistory(entry.exerciseId)} className="text-left">
-                  <span className="text-[14px] font-medium" style={{ color: "var(--text)" }}>{ex.name}</span>
-                </button>
+              <div
+                onClick={() => setOpenExerciseId((cur) => (cur === entry.exerciseId ? null : entry.exerciseId))}
+                className="flex items-center justify-between gap-2 cursor-pointer"
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <ChevronRight
+                    size={15}
+                    color="var(--text-dim)"
+                    style={{ flexShrink: 0, transition: "transform 0.15s", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+                  />
+                  <span className="text-[14px] font-medium truncate" style={{ color: "var(--text)" }}>{ex.name}</span>
+                  {!isOpen && entry.sets.length > 0 && (
+                    <span className="text-[11px] flex-shrink-0" style={{ color: "var(--text-dim)" }}>
+                      · {entry.sets.length} set{entry.sets.length > 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button
-                    onClick={() => setSwapExId(entry.exerciseId)}
+                    onClick={(e) => { e.stopPropagation(); onOpenHistory(entry.exerciseId); }}
+                    className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
+                    style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
+                  >
+                    History
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSwapExId(entry.exerciseId); }}
                     className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
                     style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
                   >
                     Swap
                   </button>
                   <button
-                    onClick={() => onRemoveExercise(entry.exerciseId)}
+                    onClick={(e) => { e.stopPropagation(); onRemoveExercise(entry.exerciseId); }}
                     className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
                     style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
                   >
@@ -695,35 +717,39 @@ function DayView({
                 </div>
               </div>
 
-              {entry.sets.length === 0 && rec && (
-                <div className="text-[11px] mb-3" style={{ color: "var(--text-dim)" }}>
-                  Last: {fmtNum(rec.lastWeight)} {unit} × {fmtNum(rec.lastReps)} · {rec.note}
+              {isOpen && (
+                <div className="mt-3">
+                  {entry.sets.length === 0 && rec && (
+                    <div className="text-[11px] mb-3" style={{ color: "var(--text-dim)" }}>
+                      Last: {fmtNum(rec.lastWeight)} {unit} × {fmtNum(rec.lastReps)} · {rec.note}
+                    </div>
+                  )}
+
+                  {entry.sets.map((set, i) => (
+                    <SetCounters
+                      key={set.id}
+                      index={i}
+                      set={set}
+                      unit={unit}
+                      isCardio={isCardio}
+                      onUpdate={(field, value) => onUpdateSet(entry.exerciseId, set.id, field, value)}
+                      onRemove={() => onRemoveSet(entry.exerciseId, set.id)}
+                    />
+                  ))}
+
+                  <button
+                    onClick={() => onAddSet(entry.exerciseId, prefill || undefined)}
+                    className="w-full mt-2 py-2.5 rounded-full text-[13px] font-semibold text-center"
+                    style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
+                  >
+                    {entry.sets.length === 0 && prefill
+                      ? isCardio
+                        ? `+ Add set · ${fmtNum(prefill.time)} min @ ${fmtNum(prefill.speed)} ${speedLabel}`
+                        : `+ Add set · ${fmtNum(prefill.reps)} × ${fmtNum(prefill.weight)} ${unit}`
+                      : "+ Add set"}
+                  </button>
                 </div>
               )}
-
-              {entry.sets.map((set, i) => (
-                <SetCounters
-                  key={set.id}
-                  index={i}
-                  set={set}
-                  unit={unit}
-                  isCardio={isCardio}
-                  onUpdate={(field, value) => onUpdateSet(entry.exerciseId, set.id, field, value)}
-                  onRemove={() => onRemoveSet(entry.exerciseId, set.id)}
-                />
-              ))}
-
-              <button
-                onClick={() => onAddSet(entry.exerciseId, prefill || undefined)}
-                className="w-full mt-2 py-2.5 rounded-full text-[13px] font-semibold text-center"
-                style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
-              >
-                {entry.sets.length === 0 && prefill
-                  ? isCardio
-                    ? `+ Add set · ${fmtNum(prefill.time)} min @ ${fmtNum(prefill.speed)} ${speedLabel}`
-                    : `+ Add set · ${fmtNum(prefill.reps)} × ${fmtNum(prefill.weight)} ${unit}`
-                  : "+ Add set"}
-              </button>
             </div>
           );
         })}
@@ -758,7 +784,7 @@ function DayView({
           exerciseView="grouped"
           setExerciseView={() => {}}
           alreadyPicked={entries.map((e) => e.exerciseId)}
-          onPick={(ex) => { onAddExercise(ex.id); }}
+          onPick={(ex) => { onAddExercise(ex.id); setOpenExerciseId(ex.id); }}
           onClose={() => setShowPicker(false)}
           doneLabel="Add"
         />
