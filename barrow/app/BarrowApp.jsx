@@ -595,17 +595,57 @@ function Counter({ label, value, onInc, onDec, onChange, plusButtons }) {
 }
 
 function SetCounters({ index, set, unit, isCardio, onUpdate, onRemove }) {
+  const [swipeArmed, setSwipeArmed] = useState(false);
+  const touchStart = useRef({ x: 0, y: 0 });
+  const armedTimeout = useRef(null);
+
+  const disarm = () => {
+    setSwipeArmed(false);
+    if (armedTimeout.current) clearTimeout(armedTimeout.current);
+  };
+
+  const handleTouchStart = (e) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const handleTouchEnd = (e) => {
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.current.x;
+    const dy = t.clientY - touchStart.current.y;
+    // Left swipe, clearly more horizontal than vertical, past a real threshold
+    // — so an ordinary vertical scroll never gets mistaken for a swipe.
+    const isLeftSwipe = dx < -60 && Math.abs(dx) > Math.abs(dy) * 1.5;
+    if (!isLeftSwipe) return;
+
+    if (swipeArmed) {
+      disarm();
+      onRemove();
+    } else {
+      setSwipeArmed(true);
+      if (armedTimeout.current) clearTimeout(armedTimeout.current);
+      armedTimeout.current = setTimeout(() => setSwipeArmed(false), 3000);
+    }
+  };
+
   return (
-    <div className="mb-3 p-3 rounded-lg" style={{ border: "1.5px solid var(--line-strong)" }}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="display text-[14px] uppercase" style={{ color: "var(--text-dim)" }}>Set {index + 1}</div>
-        <button
-          onClick={onRemove}
-          className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
-          style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
-        >
-          Delete
-        </button>
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      className="mb-3 p-3 rounded-lg transition-colors"
+      style={{
+        border: `1.5px solid ${swipeArmed ? "var(--danger)" : "var(--line-strong)"}`,
+        background: swipeArmed ? "rgba(216,50,47,0.08)" : "transparent",
+      }}
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="display text-[14px] uppercase truncate" style={{ color: swipeArmed ? "var(--danger)" : "var(--text-dim)" }}>
+          Set {index + 1}{swipeArmed ? " · swipe again to delete" : ""}
+        </div>
+        <ConfirmDeleteButton
+          onConfirm={onRemove}
+          className="flex-shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
+        />
       </div>
       <div className="flex flex-col gap-2">
         {isCardio ? <CardioFields set={set} unit={unit} onUpdate={onUpdate} /> : <StrengthFields set={set} unit={unit} onUpdate={onUpdate} />}
@@ -632,11 +672,8 @@ function StrengthFields({ set, unit, onUpdate }) {
         label="REPS"
         value={reps}
         onChange={(e) => onUpdate("reps", e.target.value)}
-        onDec={() => onUpdate("reps", roundHalf(Math.max(0, reps - 0.5)))}
-        plusButtons={[
-          { label: "+1", onClick: () => onUpdate("reps", roundHalf(reps + 1)) },
-          { label: "+.5", onClick: () => onUpdate("reps", roundHalf(reps + 0.5)) },
-        ]}
+        onInc={() => onUpdate("reps", reps + 1)}
+        onDec={() => onUpdate("reps", Math.max(0, reps - 1))}
       />
     </>
   );
@@ -1655,6 +1692,26 @@ export default function WorkoutTrackerApp() {
     { id: "templates", label: "Templates" },
   ];
 
+  // Swipe left/right between tabs, only when the bottom nav is actually
+  // showing (not mid-workout, mid-history, etc). Same threshold logic as
+  // the set swipe-to-delete: a real horizontal swipe, not an ordinary
+  // vertical scroll.
+  const tabTouchStart = useRef({ x: 0, y: 0 });
+  const handleTabTouchStart = (e) => {
+    const t = e.touches[0];
+    tabTouchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const handleTabTouchEnd = (e) => {
+    if (!showChrome) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - tabTouchStart.current.x;
+    const dy = t.clientY - tabTouchStart.current.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const idx = TABS.findIndex((tb) => tb.id === tab);
+    if (dx < 0 && idx < TABS.length - 1) setTab(TABS[idx + 1].id);
+    else if (dx > 0 && idx > 0) setTab(TABS[idx - 1].id);
+  };
+
   return (
     <div className="w-full flex justify-center font" style={{ background: "var(--bg)", height: "100dvh" }}>
       <div className="relative w-full max-w-[420px] h-full flex flex-col">
@@ -1679,7 +1736,7 @@ export default function WorkoutTrackerApp() {
           </div>
         )}
 
-        <div className="flex-1 min-h-0 relative">
+        <div className="flex-1 min-h-0 relative" onTouchStart={handleTabTouchStart} onTouchEnd={handleTabTouchEnd}>
           {view === "calendar" && (
             <div className="h-full overflow-y-auto no-scrollbar" style={{ paddingBottom: "calc(9rem + env(safe-area-inset-bottom))" }}>
               <CalendarView
