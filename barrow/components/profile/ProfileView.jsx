@@ -3,8 +3,9 @@
 import { ArrowLeft, User } from "lucide-react";
 import { IconBtn } from "../ui/IconBtn";
 import { ProfileField } from "./ProfileField";
+import { CloudBackupSection } from "./CloudBackupSection";
 
-export function ProfileView({ profile, onUpdate, onClose }) {
+export function ProfileView({ profile, onUpdate, onClose, cloudSync }) {
   const initials = `${profile.firstName?.[0] || ""}${profile.lastName?.[0] || ""}`.toUpperCase();
 
   return (
@@ -39,6 +40,8 @@ export function ProfileView({ profile, onUpdate, onClose }) {
           <div className="text-[11px] mb-1" style={{ color: "var(--text-dim)" }}>Profile ID</div>
           <div className="text-[14px] tabular" style={{ color: "var(--text-dim)" }}>{profile.profileId}</div>
         </div>
+
+        <CloudBackupSection cloudSync={cloudSync} />
       </div>
     </div>
   );

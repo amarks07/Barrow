@@ -25,14 +25,16 @@ export function WorkoutTabs({ workouts, activeId, onSelect, onCreate }) {
           </button>
         );
       })}
-      <button
-        onClick={onCreate}
-        aria-label="Add another workout"
-        className="flex-shrink-0 flex items-center justify-center rounded-full active:opacity-60"
-        style={{ width: 28, height: 28, background: "var(--surface)", border: "1.5px solid var(--line-strong)", color: "var(--text-dim)" }}
-      >
-        <Plus size={14} />
-      </button>
+      {onCreate && (
+        <button
+          onClick={onCreate}
+          aria-label="Add another workout"
+          className="flex-shrink-0 flex items-center justify-center rounded-full active:opacity-60"
+          style={{ width: 28, height: 28, background: "var(--surface)", border: "1.5px solid var(--line-strong)", color: "var(--text-dim)" }}
+        >
+          <Plus size={14} />
+        </button>
+      )}
     </div>
   );
 }

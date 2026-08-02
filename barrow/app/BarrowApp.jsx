@@ -10,14 +10,18 @@ import { ExercisesView } from "../components/exercises/ExercisesView";
 import { TemplatesView } from "../components/templates/TemplatesView";
 import { TemplateDetailView } from "../components/templates/TemplateDetailView";
 import { DayView } from "../components/workout/DayView";
+import { WorkoutSummaryView } from "../components/workout/WorkoutSummaryView";
 import { HistoryView } from "../components/history/HistoryView";
 import { ProfileView } from "../components/profile/ProfileView";
+import { SignInModal } from "../components/profile/SignInModal";
+import { ResetPasswordModal } from "../components/profile/ResetPasswordModal";
 
 import { usePersistedState } from "../hooks/usePersistedState";
 import { useWorkoutActions } from "../hooks/useWorkoutActions";
 import { useDayWorkouts } from "../hooks/useDayWorkouts";
 import { useTemplateActions } from "../hooks/useTemplateActions";
 import { useExerciseActions } from "../hooks/useExerciseActions";
+import { useCloudSync } from "../hooks/useCloudSync";
 
 import { SEED_EXERCISES, reconcileExercises } from "../lib/constants";
 import { migrateWorkouts } from "../lib/workouts";
@@ -56,6 +60,7 @@ export default function BarrowApp() {
   const [historyExId, setHistoryExId] = useState(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [pastEditOverride, setPastEditOverride] = useState(false);
 
   const idRef = useRef(0);
   const nextId = () => `s${Date.now()}-${idRef.current++}`;
@@ -64,11 +69,22 @@ export default function BarrowApp() {
   // "under" a day view so returning from a day drops back into it.
   const view = historyExId ? "history" : selectedDate ? "day" : selectedTemplateId ? "templateDetail" : tab;
   const showChrome = view !== "day" && view !== "history" && view !== "templateDetail";
+  // Past days open to a read-only recap instead of the full editor; "Edit"
+  // on that recap flips this to drop into the normal DayView.
+  const isPastDay = view === "day" && selectedDate < toKey(new Date());
+  const showDaySummary = isPastDay && !pastEditOverride;
 
   const workoutActions = useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts, templates, exercises, unit, nextId });
   const dayWorkoutsActions = useDayWorkouts({ setWorkouts, nextId });
   const templateActions = useTemplateActions({ setTemplates, setWorkouts, setSelectedTemplateId, workouts });
   const exerciseActions = useExerciseActions({ setExercises });
+  const cloudSync = useCloudSync({
+    profile, setProfile,
+    exercises, setExercises,
+    templates, setTemplates,
+    workouts, setWorkouts,
+    unit, setUnit,
+  });
 
   // Opens a date's workout list: resumes the most recently added workout if
   // the date already has one, otherwise starts a fresh one.
@@ -77,6 +93,7 @@ export default function BarrowApp() {
     const id = existing.length > 0 ? existing[existing.length - 1].id : dayWorkoutsActions.createWorkout(dateKey);
     setSelectedDate(dateKey);
     setSelectedWorkoutId(id);
+    setPastEditOverride(false);
   };
 
   const handleAddWorkout = () => setSelectedWorkoutId(dayWorkoutsActions.createWorkout(selectedDate));
@@ -137,7 +154,20 @@ export default function BarrowApp() {
             />
           )}
 
-          {view === "day" && (
+          {view === "day" && showDaySummary && (
+            <WorkoutSummaryView
+              dateKey={selectedDate}
+              dayWorkouts={workouts[selectedDate] || []}
+              activeWorkoutId={selectedWorkoutId}
+              exercises={exercises}
+              unit={unit}
+              onBack={() => { setSelectedDate(null); setSelectedWorkoutId(null); }}
+              onSelectWorkout={setSelectedWorkoutId}
+              onEdit={() => setPastEditOverride(true)}
+            />
+          )}
+
+          {view === "day" && !showDaySummary && (
             <DayView
               dateKey={selectedDate}
               dayWorkouts={workouts[selectedDate] || []}
@@ -146,7 +176,10 @@ export default function BarrowApp() {
               templates={templates}
               unit={unit}
               workouts={workouts}
-              onBack={() => { setSelectedDate(null); setSelectedWorkoutId(null); }}
+              onBack={() => {
+                if (isPastDay) setPastEditOverride(false);
+                else { setSelectedDate(null); setSelectedWorkoutId(null); }
+              }}
               onSelectWorkout={setSelectedWorkoutId}
               onCreateWorkout={handleAddWorkout}
               onDeleteWorkout={handleDeleteWorkout}
@@ -176,9 +209,15 @@ export default function BarrowApp() {
           onStartWorkout={() => openDate(toKey(new Date()))}
         />
 
-        {profileOpen && (
-          <ProfileView profile={profile} onUpdate={updateProfile} onClose={() => setProfileOpen(false)} />
+        {profileOpen && !cloudSync.recoveryMode && (
+          cloudSync.session ? (
+            <ProfileView profile={profile} onUpdate={updateProfile} onClose={() => setProfileOpen(false)} cloudSync={cloudSync} />
+          ) : (
+            <SignInModal cloudSync={cloudSync} onClose={() => setProfileOpen(false)} />
+          )
         )}
+
+        {cloudSync.recoveryMode && <ResetPasswordModal cloudSync={cloudSync} />}
       </div>
     </div>
   );
