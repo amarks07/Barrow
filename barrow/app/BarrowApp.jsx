@@ -481,6 +481,7 @@ function Counter({ label, value, onInc, onDec, onChange, plusButtons }) {
           min="0"
           value={value}
           onChange={onChange}
+          onFocus={(e) => e.target.select()}
           className="w-full text-center text-[34px] font-bold tabular outline-none bg-transparent"
           style={{ color: "var(--text)", lineHeight: 1 }}
         />
@@ -530,18 +531,20 @@ function Counter({ label, value, onInc, onDec, onChange, plusButtons }) {
 
 function SetCounters({ index, set, unit, isCardio, onUpdate, onRemove }) {
   return (
-    <div className="mb-4">
-      <div className="display text-[14px] uppercase mb-2" style={{ color: "var(--text-dim)" }}>Set {index + 1}</div>
+    <div className="mb-3 p-3 rounded-lg" style={{ border: "1.5px solid var(--line-strong)" }}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="display text-[14px] uppercase" style={{ color: "var(--text-dim)" }}>Set {index + 1}</div>
+        <button
+          onClick={onRemove}
+          className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
+          style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
+        >
+          Delete
+        </button>
+      </div>
       <div className="flex flex-col gap-2">
         {isCardio ? <CardioFields set={set} unit={unit} onUpdate={onUpdate} /> : <StrengthFields set={set} unit={unit} onUpdate={onUpdate} />}
       </div>
-      <button
-        onClick={onRemove}
-        className="w-full mt-2 py-2 text-[12px] font-medium text-center"
-        style={{ color: "var(--text-dim)" }}
-      >
-        Delete set
-      </button>
     </div>
   );
 }
