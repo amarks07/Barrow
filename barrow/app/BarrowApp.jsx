@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { AppHeader } from "../components/layout/AppHeader";
 import { BottomNav } from "../components/layout/BottomNav";
+import { TabPager } from "../components/layout/TabPager";
 import { CalendarView } from "../components/calendar/CalendarView";
 import { ExercisesView } from "../components/exercises/ExercisesView";
 import { TemplatesView } from "../components/templates/TemplatesView";
@@ -17,7 +18,6 @@ import { useWorkoutActions } from "../hooks/useWorkoutActions";
 import { useDayWorkouts } from "../hooks/useDayWorkouts";
 import { useTemplateActions } from "../hooks/useTemplateActions";
 import { useExerciseActions } from "../hooks/useExerciseActions";
-import { useTabSwipe } from "../hooks/useTabSwipe";
 
 import { SEED_EXERCISES, reconcileExercises } from "../lib/constants";
 import { migrateWorkouts } from "../lib/workouts";
@@ -69,7 +69,6 @@ export default function BarrowApp() {
   const dayWorkoutsActions = useDayWorkouts({ setWorkouts, nextId });
   const templateActions = useTemplateActions({ setTemplates, setWorkouts, setSelectedTemplateId, workouts });
   const exerciseActions = useExerciseActions({ setExercises });
-  const tabSwipe = useTabSwipe({ enabled: showChrome, tabs: TABS, activeTab: tab, onChangeTab: setTab });
 
   // Opens a date's workout list: resumes the most recently added workout if
   // the date already has one, otherwise starts a fresh one.
@@ -93,37 +92,35 @@ export default function BarrowApp() {
       <div className="relative w-full max-w-[420px] h-full flex flex-col">
         <AppHeader unit={unit} onUnitChange={setUnit} profile={profile} onOpenProfile={() => setProfileOpen(true)} />
 
-        <div className="flex-1 min-h-0 relative pt-3" onTouchStart={tabSwipe.onTouchStart} onTouchEnd={tabSwipe.onTouchEnd}>
-          {view === "calendar" && (
-            <div className="h-full overflow-y-auto no-scrollbar flex flex-col justify-center" style={{ paddingBottom: "calc(9rem + env(safe-area-inset-bottom))" }}>
-              <CalendarView
-                monthCursor={monthCursor}
-                setMonthCursor={setMonthCursor}
-                workouts={workouts}
-                onSelectDay={openDate}
+        <div className="flex-1 min-h-0 relative pt-3">
+          {(view === "calendar" || view === "exercises" || view === "templates") && (
+            <TabPager tabs={TABS} activeTab={tab} onChangeTab={setTab}>
+              <div className="h-full overflow-y-auto no-scrollbar flex flex-col justify-center" style={{ paddingBottom: "calc(9rem + env(safe-area-inset-bottom))" }}>
+                <CalendarView
+                  monthCursor={monthCursor}
+                  setMonthCursor={setMonthCursor}
+                  workouts={workouts}
+                  onSelectDay={openDate}
+                />
+              </div>
+
+              <ExercisesView
+                exercises={exercises}
+                exerciseView={exerciseView}
+                setExerciseView={setExerciseView}
+                onOpenHistory={setHistoryExId}
+                onAddCustom={exerciseActions.addCustomExercise}
+                onDeleteExercise={exerciseActions.deleteExercise}
               />
-            </div>
-          )}
 
-          {view === "exercises" && (
-            <ExercisesView
-              exercises={exercises}
-              exerciseView={exerciseView}
-              setExerciseView={setExerciseView}
-              onOpenHistory={setHistoryExId}
-              onAddCustom={exerciseActions.addCustomExercise}
-              onDeleteExercise={exerciseActions.deleteExercise}
-            />
-          )}
-
-          {view === "templates" && (
-            <TemplatesView
-              templates={templates}
-              exercises={exercises}
-              onCreate={templateActions.createTemplate}
-              onDelete={templateActions.deleteTemplate}
-              onOpenTemplate={setSelectedTemplateId}
-            />
+              <TemplatesView
+                templates={templates}
+                exercises={exercises}
+                onCreate={templateActions.createTemplate}
+                onDelete={templateActions.deleteTemplate}
+                onOpenTemplate={setSelectedTemplateId}
+              />
+            </TabPager>
           )}
 
           {view === "templateDetail" && (
