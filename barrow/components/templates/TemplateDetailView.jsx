@@ -4,17 +4,18 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, X } from "lucide-react";
 import { IconBtn } from "../ui/IconBtn";
 import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
+import { EditableTitle } from "../ui/EditableTitle";
 import { ExercisePicker } from "../exercises/ExercisePicker";
 import { shortDayLabel } from "../../lib/date";
 import { exerciseMeta } from "../../lib/exercise-meta";
 
-export function TemplateDetailView({ template, exercises, workouts, onBack, onDelete, onSelectDate, onAddExercise, onRemoveExercise }) {
+export function TemplateDetailView({ template, exercises, workouts, onBack, onDelete, onRename, onSelectDate, onAddExercise, onRemoveExercise }) {
   const [showPicker, setShowPicker] = useState(false);
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
 
   const usedDates = useMemo(() => {
     return Object.entries(workouts)
-      .filter(([, w]) => (w.templateIds || []).includes(template.id))
+      .filter(([, dayWorkouts]) => dayWorkouts.some((w) => (w.templateIds || []).includes(template.id)))
       .map(([dateKey]) => dateKey)
       .sort((a, b) => (a < b ? 1 : -1))
       .slice(0, 5);
@@ -24,13 +25,24 @@ export function TemplateDetailView({ template, exercises, workouts, onBack, onDe
     <div className="flex flex-col h-full relative">
       <div className="flex items-center gap-3 px-5 pt-4 pb-4" style={{ borderBottom: "1.5px solid var(--line)" }}>
         <IconBtn label="Back" onClick={onBack}><ArrowLeft size={17} /></IconBtn>
-        <h3 className="display text-[19px] flex-1" style={{ color: "var(--text)" }}>{template.name}</h3>
+        <div className="flex-1 min-w-0">
+          <EditableTitle
+            value={template.name}
+            onChange={(name) => onRename(template.id, name)}
+            className="display text-[19px]"
+            style={{ color: "var(--text)" }}
+          />
+        </div>
         <ConfirmDeleteIconButton onConfirm={() => onDelete(template.id)} ariaLabel="Delete template" size={16} />
       </div>
       <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4">
         <div className="flex items-center justify-between mb-2">
           <div className="display text-[13px] uppercase" style={{ color: "var(--text-dim)" }}>Exercises</div>
-          <button onClick={() => setShowPicker(true)} className="text-[12px] font-semibold" style={{ color: "var(--accent)" }}>
+          <button
+            onClick={() => setShowPicker(true)}
+            className="text-[12px] font-semibold px-2.5 py-1.5 rounded-full flex-shrink-0"
+            style={{ background: "var(--surface)", color: "var(--accent)", border: "1.5px solid var(--line-strong)" }}
+          >
             + Add exercise
           </button>
         </div>
@@ -45,8 +57,8 @@ export function TemplateDetailView({ template, exercises, workouts, onBack, onDe
                 <button
                   onClick={() => onRemoveExercise(template.id, ex.id)}
                   aria-label={`Remove ${ex.name} from template`}
-                  className="absolute"
-                  style={{ top: 8, right: 8 }}
+                  className="absolute flex items-center justify-center"
+                  style={{ top: 2, right: 2, padding: 6 }}
                 >
                   <X size={13} color="var(--text-dim)" />
                 </button>
@@ -78,6 +90,7 @@ export function TemplateDetailView({ template, exercises, workouts, onBack, onDe
           alreadyPicked={template.exerciseIds}
           onPick={(ex) => onAddExercise(template.id, ex.id)}
           onClose={() => setShowPicker(false)}
+          doneLabel="Done"
         />
       )}
     </div>

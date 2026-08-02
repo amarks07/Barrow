@@ -32,8 +32,8 @@ export function CalendarView({ monthCursor, setMonthCursor, workouts, onSelectDa
         {cells.map((date, i) => {
           if (!date) return <div key={i} />;
           const key = toKey(date);
-          const workout = workouts[key];
-          const setCount = workout ? workout.entries.reduce((sum, e) => sum + e.sets.length, 0) : 0;
+          const dayWorkouts = workouts[key] || [];
+          const setCount = dayWorkouts.reduce((sum, w) => sum + w.entries.reduce((s, e) => s + e.sets.length, 0), 0);
           const isToday = key === todayKey;
           const dotOpacity = setCount === 0 ? 0 : setCount <= 3 ? 0.7 : setCount <= 8 ? 0.85 : 1;
           return (
@@ -44,7 +44,7 @@ export function CalendarView({ monthCursor, setMonthCursor, workouts, onSelectDa
                   width: 22,
                   height: 22,
                   fontSize: 13,
-                  color: isToday ? "var(--accent)" : workout ? "var(--text)" : "var(--text-dim)",
+                  color: isToday ? "var(--accent)" : dayWorkouts.length > 0 ? "var(--text)" : "var(--text-dim)",
                   fontWeight: isToday ? 700 : 400,
                   borderRadius: 6,
                   border: isToday ? "1.5px solid var(--accent)" : "1.5px solid transparent",

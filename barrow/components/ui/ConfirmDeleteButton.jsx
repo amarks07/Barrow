@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-// Two-step delete: first tap arms it (red, "You sure?"), second tap actually
+// Two-step delete: first tap arms it (red, "Delete?"), second tap actually
 // deletes. Auto-disarms after a few seconds if you don't confirm.
-export function ConfirmDeleteButton({ onConfirm, label = "Delete", confirmLabel = "You sure?", stopPropagation, className }) {
+export function ConfirmDeleteButton({ onConfirm, label = "Delete", confirmLabel = "Delete?", stopPropagation, className }) {
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {

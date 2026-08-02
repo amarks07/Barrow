@@ -7,7 +7,15 @@ import { ColorSwitch } from "../ui/ColorSwitch";
 // templates, a day's workout, exercise history, template detail).
 export function AppHeader({ unit, onUnitChange, profile, onOpenProfile }) {
   return (
-    <div className="flex-shrink-0 flex items-center justify-between px-5" style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))", paddingBottom: "1rem" }}>
+    <div
+      className="flex-shrink-0 flex items-center justify-between px-5"
+      style={{
+        paddingTop: "max(1.5rem, env(safe-area-inset-top))",
+        paddingBottom: "1rem",
+        background: "var(--header-bg)",
+        borderBottom: "1.5px solid var(--line)",
+      }}
+    >
       <span className="display text-[22px]" style={{ color: "var(--text)" }}>BARROW</span>
       <div className="flex items-center gap-2.5">
         <ColorSwitch value={unit} onChange={onUnitChange} options={[{ value: "lb", label: "LB" }, { value: "kg", label: "KG" }]} />

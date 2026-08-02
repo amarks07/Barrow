@@ -1,10 +1,11 @@
 import { convertSpeed, convertWeight, fmtNum, roundHalf } from "./units";
+import { flattenWorkouts } from "./workouts";
 
-export function getRepRange(exerciseId, workouts, excludeDateKey) {
+export function getRepRange(exerciseId, workouts, excludeWorkoutId) {
   let max = 0;
-  Object.entries(workouts).forEach(([dateKey, w]) => {
-    if (dateKey === excludeDateKey) return;
-    const entry = w.entries.find((e) => e.exerciseId === exerciseId);
+  flattenWorkouts(workouts).forEach(({ workout }) => {
+    if (workout.id === excludeWorkoutId) return;
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
     if (!entry) return;
     entry.sets.forEach((s) => {
       const r = parseFloat(s.reps);
@@ -17,12 +18,12 @@ export function getRepRange(exerciseId, workouts, excludeDateKey) {
   return { repLow, repHigh, fromHistory };
 }
 
-export function getRecommendation(exerciseId, workouts, unit, excludeDateKey, repLow = 8, repHigh = 12) {
+export function getRecommendation(exerciseId, workouts, unit, excludeWorkoutId, repLow = 8, repHigh = 12) {
   const increment = unit === "kg" ? 2.5 : 5;
-  const dateKeys = Object.keys(workouts).filter((k) => k !== excludeDateKey).sort((a, b) => (a < b ? 1 : -1));
+  const ordered = flattenWorkouts(workouts).filter(({ workout }) => workout.id !== excludeWorkoutId);
 
-  for (const dateKey of dateKeys) {
-    const entry = workouts[dateKey].entries.find((e) => e.exerciseId === exerciseId);
+  for (const { dateKey, workout } of ordered) {
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
     if (!entry || entry.sets.length === 0) continue;
 
     let top = null;
@@ -52,12 +53,12 @@ export function getRecommendation(exerciseId, workouts, unit, excludeDateKey, re
   return null;
 }
 
-// Total weight×reps for a given exercise on each day it was logged —
+// Total weight×reps for a given exercise on each workout it was logged in —
 // the "volume" series the history chart plots, most recent 10 sessions.
 export function getVolumeSeries(exerciseId, workouts, unit) {
   const rows = [];
-  Object.entries(workouts).forEach(([dateKey, w]) => {
-    const entry = w.entries.find((e) => e.exerciseId === exerciseId);
+  flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
     if (!entry || entry.sets.length === 0) return;
     let volume = 0;
     entry.sets.forEach((s) => {
@@ -76,8 +77,8 @@ export function getVolumeSeries(exerciseId, workouts, unit) {
 // 10 sessions — the closest thing cardio has to "volume".
 export function getCardioDistanceSeries(exerciseId, workouts, unit) {
   const rows = [];
-  Object.entries(workouts).forEach(([dateKey, w]) => {
-    const entry = w.entries.find((e) => e.exerciseId === exerciseId);
+  flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
     if (!entry || entry.sets.length === 0) return;
     let distance = 0;
     entry.sets.forEach((s) => {

@@ -16,9 +16,9 @@ export function HistoryView({ exercise, workouts, unit, onBack }) {
 
   const records = useMemo(() => {
     const out = [];
-    Object.entries(workouts).forEach(([dateKey, w]) => {
-      const entry = w.entries.find((e) => e.exerciseId === exercise.id);
-      if (entry && entry.sets.length) out.push({ dateKey, sets: entry.sets });
+    Object.entries(workouts).forEach(([dateKey, dayWorkouts]) => {
+      const sets = dayWorkouts.flatMap((w) => w.entries.find((e) => e.exerciseId === exercise.id)?.sets || []);
+      if (sets.length) out.push({ dateKey, sets });
     });
     return out.sort((a, b) => (a.dateKey < b.dateKey ? 1 : -1));
   }, [workouts, exercise]);

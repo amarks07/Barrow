@@ -5,13 +5,18 @@ import { X } from "lucide-react";
 import { IconBtn } from "../ui/IconBtn";
 import { ColorSwitch } from "../ui/ColorSwitch";
 import { CategoryFilterChips } from "../ui/CategoryFilterChips";
+import { FAB } from "../ui/FAB";
 import { ExerciseRows } from "./ExerciseRows";
+import { AddCustomExerciseModal } from "./AddCustomExerciseModal";
 import { CATEGORIES } from "../../lib/constants";
 
 // Used by both the day view (add/swap an exercise) and the template builder.
-export function ExercisePicker({ exercises, exerciseView, setExerciseView, onPick, onClose, alreadyPicked = [], title = "Choose exercise", doneLabel }) {
+// `onAddCustom`, when passed, shows a button to define and immediately pick
+// a custom exercise without leaving the picker.
+export function ExercisePicker({ exercises, exerciseView, setExerciseView, onPick, onClose, onAddCustom, alreadyPicked = [], title = "Choose exercise", doneLabel }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [showAddCustom, setShowAddCustom] = useState(false);
   const filtered = exercises.filter(
     (e) => e.name.toLowerCase().includes(query.toLowerCase()) && (categoryFilter === "all" || e.category === categoryFilter)
   );
@@ -79,6 +84,24 @@ export function ExercisePicker({ exercises, exerciseView, setExerciseView, onPic
             {doneLabel}
           </button>
         </div>
+      )}
+
+      {onAddCustom && (
+        <FAB
+          label="Add custom exercise"
+          onClick={() => setShowAddCustom(true)}
+          bottom={doneLabel ? "calc(5.5rem + env(safe-area-inset-bottom))" : "calc(1.25rem + env(safe-area-inset-bottom))"}
+        />
+      )}
+
+      {showAddCustom && (
+        <AddCustomExerciseModal
+          onClose={() => setShowAddCustom(false)}
+          onSave={(name, category, muscle) => {
+            onPick(onAddCustom(name, category, muscle));
+            setShowAddCustom(false);
+          }}
+        />
       )}
     </div>
   );

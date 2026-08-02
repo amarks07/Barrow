@@ -1,9 +1,12 @@
 "use client";
 
-export function FAB({ onClick, label }) {
-  // Nav height is deterministic: 1rem top padding + 20px content row +
-  // max(1rem, safe-area) bottom padding. FAB sits exactly 1.25rem above
-  // that — the same distance it sits from the side of the screen.
+// Default `bottom` clears the app's bottom tab nav: 1rem top padding + 20px
+// content row + max(1rem, safe-area) bottom padding, plus 1.25rem of air —
+// the same distance the FAB sits from the side of the screen. Views with no
+// tab nav below them (e.g. a full-screen picker) can override it.
+const DEFAULT_BOTTOM = "calc(56px + max(16px, env(safe-area-inset-bottom)))";
+
+export function FAB({ onClick, label, bottom = DEFAULT_BOTTOM }) {
   return (
     <button
       onClick={onClick}
@@ -12,7 +15,7 @@ export function FAB({ onClick, label }) {
       style={{
         position: "fixed",
         right: "max(1.25rem, calc(50vw - 210px + 1.25rem))",
-        bottom: "calc(56px + max(16px, env(safe-area-inset-bottom)))",
+        bottom,
         width: 48,
         height: 48,
         borderRadius: 999,

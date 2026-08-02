@@ -1,12 +1,17 @@
 "use client";
 
-// Mutations for a single day's workout: renaming it, adding/removing/swapping
-// exercises, editing sets, and pulling a template's exercise list into it.
-export function useWorkoutActions({ selectedDate, setWorkouts, templates, exercises, unit, nextId }) {
-  const ensureWorkout = (dateKey, updater) => {
+// Mutations for one already-selected workout: renaming it, adding/removing/
+// swapping exercises, editing sets, and pulling a template's exercise list
+// into it. Creating/deleting whole workouts for a day lives in useDayWorkouts.
+export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts, templates, exercises, unit, nextId }) {
+  const ensureWorkout = (updater) => {
     setWorkouts((prev) => {
-      const current = prev[dateKey] || { name: "Workout", entries: [], templateIds: [] };
-      return { ...prev, [dateKey]: updater(current) };
+      const dayWorkouts = prev[selectedDate] || [];
+      const idx = dayWorkouts.findIndex((w) => w.id === selectedWorkoutId);
+      if (idx === -1) return prev;
+      const updated = [...dayWorkouts];
+      updated[idx] = updater(updated[idx]);
+      return { ...prev, [selectedDate]: updated };
     });
   };
 
@@ -18,22 +23,23 @@ export function useWorkoutActions({ selectedDate, setWorkouts, templates, exerci
   };
 
   return {
-    onRename: (name) => ensureWorkout(selectedDate, (w) => ({ ...w, name })),
+    onRename: (name) => ensureWorkout((w) => ({ ...w, name })),
 
     onAddExercise: (exId) =>
-      ensureWorkout(selectedDate, (w) =>
+      ensureWorkout((w) =>
         w.entries.some((e) => e.exerciseId === exId)
           ? w
           : { ...w, entries: [...w.entries, makeEntry(exId)] }
       ),
 
     onRemoveExercise: (exId) =>
-      ensureWorkout(selectedDate, (w) => ({ ...w, entries: w.entries.filter((e) => e.exerciseId !== exId) })),
+      ensureWorkout((w) => ({ ...w, entries: w.entries.filter((e) => e.exerciseId !== exId) })),
 
-    // Swaps one exercise for another on this day only — the template (and
-    // any other day that used it) is untouched. New exercise starts fresh.
+    // Swaps one exercise for another on this workout only — the template
+    // (and any other workout that used it) is untouched. New exercise
+    // starts fresh.
     onSwapExercise: (oldExId, newExId) =>
-      ensureWorkout(selectedDate, (w) => {
+      ensureWorkout((w) => {
         if (oldExId === newExId) return w;
         const alreadyUsed = w.entries.some((e) => e.exerciseId === newExId);
         if (alreadyUsed) return w;
@@ -42,13 +48,13 @@ export function useWorkoutActions({ selectedDate, setWorkouts, templates, exerci
 
     // Changes the flat/incline/decline angle on an already-added entry.
     onSetAngle: (exId, angle) =>
-      ensureWorkout(selectedDate, (w) => ({
+      ensureWorkout((w) => ({
         ...w,
         entries: w.entries.map((e) => (e.exerciseId === exId ? { ...e, angle } : e)),
       })),
 
     onAddSet: (exId, preset) =>
-      ensureWorkout(selectedDate, (w) => ({
+      ensureWorkout((w) => ({
         ...w,
         entries: w.entries.map((e) =>
           e.exerciseId === exId
@@ -71,7 +77,7 @@ export function useWorkoutActions({ selectedDate, setWorkouts, templates, exerci
       })),
 
     onUpdateSet: (exId, setId, field, value) =>
-      ensureWorkout(selectedDate, (w) => ({
+      ensureWorkout((w) => ({
         ...w,
         entries: w.entries.map((e) =>
           e.exerciseId === exId
@@ -90,7 +96,7 @@ export function useWorkoutActions({ selectedDate, setWorkouts, templates, exerci
       })),
 
     onRemoveSet: (exId, setId) =>
-      ensureWorkout(selectedDate, (w) => ({
+      ensureWorkout((w) => ({
         ...w,
         entries: w.entries.map((e) => (e.exerciseId === exId ? { ...e, sets: e.sets.filter((s) => s.id !== setId) } : e)),
       })),
@@ -98,7 +104,7 @@ export function useWorkoutActions({ selectedDate, setWorkouts, templates, exerci
     onApplyTemplate: (tplId) => {
       const tpl = templates.find((t) => t.id === tplId);
       if (!tpl) return;
-      ensureWorkout(selectedDate, (w) => {
+      ensureWorkout((w) => {
         const existingIds = new Set(w.entries.map((e) => e.exerciseId));
         const newEntries = tpl.exerciseIds.filter((id) => !existingIds.has(id)).map(makeEntry);
         const templateIds = (w.templateIds || []).includes(tplId) ? w.templateIds : [...(w.templateIds || []), tplId];

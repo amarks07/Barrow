@@ -1,12 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
 import { FAB } from "../ui/FAB";
-import { TemplateBuilder } from "./TemplateBuilder";
 
-export function TemplatesView({ templates, exercises, onCreate, onDelete, onOpenTemplate }) {
-  const [showBuilder, setShowBuilder] = useState(false);
+export function TemplatesView({ templates, exercises, onNewTemplate, onDelete, onOpenTemplate }) {
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
 
   return (
@@ -24,27 +22,27 @@ export function TemplatesView({ templates, exercises, onCreate, onDelete, onOpen
           </p>
         )}
         {templates.map((t) => (
-          <button key={t.id} onClick={() => onOpenTemplate(t.id)} className="text-left card p-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[14px] font-medium" style={{ color: "var(--text)" }}>{t.name}</span>
-              <ConfirmDeleteIconButton onConfirm={() => onDelete(t.id)} ariaLabel="Delete template" size={14} />
-            </div>
-            <div className="text-[11px] leading-relaxed" style={{ color: "var(--text-dim)" }}>
-              {t.exerciseIds.map((id) => exMap[id]?.name).filter(Boolean).join(" · ")}
-            </div>
-          </button>
+          <div key={t.id} className="card p-4 relative">
+            <button onClick={() => onOpenTemplate(t.id)} className="text-left w-full pr-8">
+              <div className="text-[14px] font-medium mb-1" style={{ color: "var(--text)" }}>{t.name}</div>
+              <div className="text-[11px] leading-relaxed" style={{ color: "var(--text-dim)" }}>
+                {t.exerciseIds.length > 0
+                  ? t.exerciseIds.map((id) => exMap[id]?.name).filter(Boolean).join(" · ")
+                  : "No exercises yet"}
+              </div>
+            </button>
+            <ConfirmDeleteIconButton
+              onConfirm={() => onDelete(t.id)}
+              ariaLabel="Delete template"
+              size={14}
+              className="absolute"
+              style={{ top: 14, right: 14 }}
+            />
+          </div>
         ))}
       </div>
 
-      <FAB label="New template" onClick={() => setShowBuilder(true)} />
-
-      {showBuilder && (
-        <TemplateBuilder
-          exercises={exercises}
-          onClose={() => setShowBuilder(false)}
-          onSave={(name, ids) => { onCreate(name, ids); setShowBuilder(false); }}
-        />
-      )}
+      <FAB label="New template" onClick={onNewTemplate} />
     </div>
   );
 }

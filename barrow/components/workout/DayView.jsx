@@ -4,25 +4,31 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, ChevronRight, X } from "lucide-react";
 import { IconBtn } from "../ui/IconBtn";
 import { ConfirmDeleteButton } from "../ui/ConfirmDeleteButton";
+import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
+import { EditableTitle } from "../ui/EditableTitle";
 import { ExercisePicker } from "../exercises/ExercisePicker";
 import { SetCounters } from "./SetCounters";
 import { SaveAsTemplateModal } from "./SaveAsTemplateModal";
 import { AngleToggle } from "./AngleToggle";
+import { WorkoutTabs } from "./WorkoutTabs";
 import { dayLabel } from "../../lib/date";
 import { convertSpeed, convertWeight, fmtNum } from "../../lib/units";
 import { getRecommendation, getRepRange } from "../../lib/analytics";
 import { exerciseMeta } from "../../lib/exercise-meta";
 
 export function DayView({
-  dateKey, workout, exercises, templates, unit, workouts,
-  onBack, onRename, onAddExercise, onRemoveExercise, onSwapExercise,
+  dateKey, dayWorkouts, activeWorkoutId, exercises, templates, unit, workouts,
+  onBack, onSelectWorkout, onCreateWorkout, onDeleteWorkout,
+  onRename, onAddExercise, onRemoveExercise, onSwapExercise,
   onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory, onSaveAsTemplate, onSetAngle,
+  onAddCustomExercise,
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [swapExId, setSwapExId] = useState(null);
   const [openExerciseId, setOpenExerciseId] = useState(null);
+  const workout = dayWorkouts.find((w) => w.id === activeWorkoutId) || dayWorkouts[0];
   const entries = workout ? workout.entries : [];
   const usedTemplate = (workout?.templateIds || []).length > 0;
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
@@ -31,11 +37,11 @@ export function DayView({
     <div className="flex flex-col h-full relative">
       <div className="flex items-center gap-3 px-5 pt-4 pb-4" style={{ borderBottom: "1.5px solid var(--line)" }}>
         <IconBtn label="Back" onClick={onBack}><ArrowLeft size={17} /></IconBtn>
-        <div className="flex-1">
-          <input
+        <div className="flex-1 min-w-0">
+          <EditableTitle
             value={workout ? workout.name : "Workout"}
-            onChange={(e) => onRename(e.target.value)}
-            className="bg-transparent outline-none text-[16px] font-semibold w-full"
+            onChange={onRename}
+            className="text-[16px] font-semibold"
             style={{ color: "var(--text)" }}
           />
           <div className="text-[11px]" style={{ color: "var(--text-dim)" }}>{dayLabel(dateKey)}</div>
@@ -49,7 +55,22 @@ export function DayView({
             Save as template
           </button>
         )}
+        {dayWorkouts.length > 1 && workout && (
+          <ConfirmDeleteIconButton
+            onConfirm={() => onDeleteWorkout(workout.id)}
+            ariaLabel="Delete this workout"
+            size={16}
+            className="flex-shrink-0"
+          />
+        )}
       </div>
+
+      <WorkoutTabs
+        workouts={dayWorkouts}
+        activeId={workout?.id}
+        onSelect={onSelectWorkout}
+        onCreate={onCreateWorkout}
+      />
 
       <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-3" style={{ paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}>
         {entries.length === 0 && (
@@ -63,8 +84,8 @@ export function DayView({
           const isCardio = ex.category === "Cardio";
           const isOpen = openExerciseId === entry.exerciseId;
           const lastSet = entry.sets[entry.sets.length - 1];
-          const { repLow, repHigh } = getRepRange(entry.exerciseId, workouts, dateKey);
-          const rec = !isCardio && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, dateKey, repLow, repHigh) : null;
+          const { repLow, repHigh } = getRepRange(entry.exerciseId, workouts, workout.id);
+          const rec = !isCardio && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workout.id, repLow, repHigh) : null;
           const speedLabel = unit === "kg" ? "km/h" : "mph";
           // Tapping "Add set" always does the sensible thing: repeat your last
           // set's numbers if you've already logged one today, otherwise start
@@ -211,6 +232,7 @@ export function DayView({
           alreadyPicked={entries.map((e) => e.exerciseId)}
           onPick={(ex) => { onAddExercise(ex.id); setOpenExerciseId(ex.id); }}
           onClose={() => setShowPicker(false)}
+          onAddCustom={onAddCustomExercise}
           doneLabel="Add"
         />
       )}
@@ -224,13 +246,14 @@ export function DayView({
           alreadyPicked={entries.map((e) => e.exerciseId).filter((id) => id !== swapExId)}
           onPick={(ex) => { onSwapExercise(swapExId, ex.id); setSwapExId(null); }}
           onClose={() => setSwapExId(null)}
+          onAddCustom={onAddCustomExercise}
         />
       )}
 
       {showSaveTemplate && (
         <SaveAsTemplateModal
           onClose={() => setShowSaveTemplate(false)}
-          onSave={(name) => { onSaveAsTemplate(dateKey, name); setShowSaveTemplate(false); }}
+          onSave={(name) => { onSaveAsTemplate(dateKey, workout.id, name); setShowSaveTemplate(false); }}
         />
       )}
 
