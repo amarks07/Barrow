@@ -46,20 +46,31 @@ npx eas build:configure
 
 ## Building and shipping a release
 
-```bash
-npx eas build --platform android --profile preview
-```
+Bump `"version"` in `app.json`, commit it, then run the **Build Android APK** GitHub Action
+(`.github/workflows/build-android-apk.yml`, manually triggered from the Actions tab). It:
 
-This runs on Expo's build servers and produces a downloadable `.apk` (see `eas.json` — the
-`preview` profile is set to `buildType: "apk"`, not an `.aab`, since there's no Play Store
-involved). Once it finishes:
+1. Runs `eas build --platform android --profile preview` on Expo's build servers (see
+   `eas.json` — the `preview` profile is set to `buildType: "apk"`, not an `.aab`, since
+   there's no Play Store involved), authenticated via the repo's `EXPO_TOKEN` secret.
+2. Uploads the resulting `.apk` as a GitHub Release asset named `barrow.apk`, so
+   `github.com/amarks07/Barrow/releases/latest/download/barrow.apk` always points at the
+   newest build.
+3. Updates the version string shown on the download page and pushes that commit, which
+   triggers Vercel's normal auto-deploy.
 
-1. Download the `.apk` from the link EAS prints (or `npx eas build:list`).
-2. Copy it to `apps/web/public/downloads/barrow.apk`.
-3. Commit and redeploy `apps/web` (or push, if it's connected to Vercel for auto-deploy).
+You can still build locally the same way (`npx eas build --platform android --profile
+preview`) if you just want to test a `.apk` without publishing a release.
 
 Android will show an "unknown sources" / Play Protect warning on install — expected for
 direct APK distribution outside the Play Store, and called out on the download page itself.
+
+### One-time CI setup
+
+- Add an `EXPO_TOKEN` repo secret (Settings → Secrets and variables → Actions) — generate one
+  at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
+- The `npx eas build:configure` step above must have already been run and committed (it
+  writes `extra.eas.projectId` into `app.json`) — the Action can't do this interactive step
+  for you.
 
 ## Feature parity
 

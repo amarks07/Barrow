@@ -17,10 +17,10 @@ Open http://localhost:3000.
 
 ## Getting the APK onto this page
 
-`public/downloads/barrow.apk` isn't checked in until a real build exists — see
-`../mobile/README.md` for the EAS build steps. Once you have a built `.apk`, copy it to
-`apps/web/public/downloads/barrow.apk` and redeploy; the download button on this page links
-straight to that path.
+The download button links to `https://github.com/amarks07/Barrow/releases/latest/download/barrow.apk`
+— a stable URL that always resolves to the most recent GitHub Release's `barrow.apk` asset.
+Nothing here needs to change when a new build ships. See `../mobile/README.md` for how that
+release gets created (the `Build Android APK` GitHub Action).
 
 ## Deploy to Vercel
 

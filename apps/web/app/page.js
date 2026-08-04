@@ -23,7 +23,7 @@ export default function Page() {
         </p>
 
         <a
-          href="/downloads/barrow.apk"
+          href="https://github.com/amarks07/Barrow/releases/latest/download/barrow.apk"
           download
           className="pill w-full mt-8 py-3.5 text-[15px] font-bold text-center"
           style={{ background: "var(--accent)", color: "#121214" }}

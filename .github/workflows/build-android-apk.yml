@@ -1,0 +1,72 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Read app version
+        id: version
+        run: echo "version=$(node -p "require('./apps/mobile/app.json').expo.version")" >> "$GITHUB_OUTPUT"
+
+      # Requires EXPO_TOKEN in repo secrets (Settings > Secrets and variables > Actions).
+      # Generate one at https://expo.dev/settings/access-tokens
+      - name: Build Android APK via EAS
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli@latest build --platform android --profile preview --non-interactive --wait --json > eas-output.json
+
+      - name: Extract APK download URL
+        id: extract_url
+        working-directory: apps/mobile
+        run: |
+          URL=$(node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('eas-output.json', 'utf8'));
+            const build = Array.isArray(data) ? data[0] : data;
+            const url = build && build.artifacts && build.artifacts.buildUrl;
+            if (!url) { console.error('No buildUrl found in EAS build output:'); console.error(JSON.stringify(build, null, 2)); process.exit(1); }
+            console.log(url);
+          ")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Download APK
+        working-directory: apps/mobile
+        run: curl -fL -o barrow.apk "${{ steps.extract_url.outputs.url }}"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="mobile-v${{ steps.version.outputs.version }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" apps/mobile/barrow.apk --clobber
+          else
+            gh release create "$TAG" apps/mobile/barrow.apk \
+              --title "Barrow Android v${{ steps.version.outputs.version }}" \
+              --notes "Automated Android build from commit ${{ github.sha }}."
+          fi
+
+      - name: Sync displayed version on the download page
+        run: |
+          sed -i "s/const APK_VERSION = \".*\";/const APK_VERSION = \"${{ steps.version.outputs.version }}\";/" apps/web/app/page.js
+          if ! git diff --quiet -- apps/web/app/page.js; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add apps/web/app/page.js
+            git commit -m "Sync download page version to ${{ steps.version.outputs.version }}"
+            git push
+          fi
