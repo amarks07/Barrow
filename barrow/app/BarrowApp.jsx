@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AppHeader } from "../components/layout/AppHeader";
 import { BottomNav } from "../components/layout/BottomNav";
@@ -86,6 +86,17 @@ export default function BarrowApp() {
     unit, setUnit,
   });
 
+  // HistoryView/TemplateDetailView assume their exercise/template exists —
+  // if the one currently open gets deleted (or a cloud restore replaces the
+  // whole list out from under it), fall back instead of rendering with an
+  // undefined exercise/template.
+  useEffect(() => {
+    if (historyExId && !exercises.some((e) => e.id === historyExId)) setHistoryExId(null);
+  }, [exercises, historyExId]);
+  useEffect(() => {
+    if (selectedTemplateId && !templates.some((t) => t.id === selectedTemplateId)) setSelectedTemplateId(null);
+  }, [templates, selectedTemplateId]);
+
   // Opens a date's workout list: resumes the most recently added workout if
   // the date already has one, otherwise starts a fresh one.
   const openDate = (dateKey) => {
@@ -97,6 +108,9 @@ export default function BarrowApp() {
   };
 
   const handleAddWorkout = () => setSelectedWorkoutId(dayWorkoutsActions.createWorkout(selectedDate));
+
+  const workoutHasSets = (dateKey, workoutId) =>
+    (workouts[dateKey] || []).find((w) => w.id === workoutId)?.entries.some((e) => e.sets.length > 0) ?? false;
 
   const handleDeleteWorkout = (workoutId) => {
     dayWorkoutsActions.deleteWorkout(selectedDate, workoutId);
@@ -128,6 +142,7 @@ export default function BarrowApp() {
                 onOpenHistory={setHistoryExId}
                 onAddCustom={exerciseActions.addCustomExercise}
                 onDeleteExercise={exerciseActions.deleteExercise}
+                active={tab === "exercises"}
               />
 
               <TemplatesView
@@ -136,6 +151,8 @@ export default function BarrowApp() {
                 onCreate={templateActions.createTemplate}
                 onDelete={templateActions.deleteTemplate}
                 onOpenTemplate={setSelectedTemplateId}
+                active={tab === "templates"}
+                onAddCustomExercise={exerciseActions.addCustomExercise}
               />
             </TabPager>
           )}
@@ -151,6 +168,7 @@ export default function BarrowApp() {
               onSelectDate={openDate}
               onAddExercise={templateActions.addExerciseToTemplate}
               onRemoveExercise={templateActions.removeExerciseFromTemplate}
+              onAddCustomExercise={exerciseActions.addCustomExercise}
             />
           )}
 
@@ -177,6 +195,9 @@ export default function BarrowApp() {
               unit={unit}
               workouts={workouts}
               onBack={() => {
+                if (!workoutHasSets(selectedDate, selectedWorkoutId)) {
+                  dayWorkoutsActions.deleteWorkout(selectedDate, selectedWorkoutId);
+                }
                 if (isPastDay) setPastEditOverride(false);
                 else { setSelectedDate(null); setSelectedWorkoutId(null); }
               }}

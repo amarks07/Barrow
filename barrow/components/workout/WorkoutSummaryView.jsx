@@ -69,10 +69,20 @@ export function WorkoutSummaryView({
               ) : (
                 <div className="flex flex-col gap-1">
                   {entry.sets.map((set, i) => (
-                    <div key={set.id} className="text-[13px]" style={{ color: "var(--text)" }}>
-                      {isCardio
-                        ? `Set ${i + 1} · ${fmtNum(set.time)} min @ ${fmtNum(convertSpeed(set.speed, set.unit, unit))} ${speedLabel}`
-                        : `Set ${i + 1} · ${fmtNum(convertWeight(set.weight, set.unit, unit))} ${unit} × ${fmtNum(set.reps)} reps`}
+                    <div key={set.id} className="flex items-center gap-1.5 text-[13px]" style={{ color: "var(--text)" }}>
+                      <span>
+                        {isCardio
+                          ? `Set ${i + 1} · ${fmtNum(set.time)} min @ ${fmtNum(convertSpeed(set.speed, set.unit, unit))} ${speedLabel}`
+                          : `Set ${i + 1} · ${fmtNum(convertWeight(set.weight, set.unit, unit))} ${unit} × ${fmtNum(set.reps)} reps`}
+                      </span>
+                      {set.warmup && (
+                        <span
+                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                          style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
+                        >
+                          Warmup
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>

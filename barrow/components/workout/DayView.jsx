@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowLeft, ChevronRight, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { ArrowLeft, ChevronRight, GripVertical, X } from "lucide-react";
 import { IconBtn } from "../ui/IconBtn";
 import { ConfirmDeleteButton } from "../ui/ConfirmDeleteButton";
 import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
@@ -16,22 +16,87 @@ import { convertSpeed, convertWeight, fmtNum } from "../../lib/units";
 import { getRecommendation, getRepRange } from "../../lib/analytics";
 import { exerciseMeta } from "../../lib/exercise-meta";
 
+const LONG_PRESS_MS = 350;
+const MOVE_CANCEL_PX = 10;
+
 export function DayView({
   dateKey, dayWorkouts, activeWorkoutId, exercises, templates, unit, workouts,
   onBack, onSelectWorkout, onCreateWorkout, onDeleteWorkout,
   onRename, onAddExercise, onRemoveExercise, onSwapExercise,
   onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory, onSaveAsTemplate, onSetAngle,
-  onAddCustomExercise,
+  onAddCustomExercise, onReorderExercise,
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [swapExId, setSwapExId] = useState(null);
   const [openExerciseId, setOpenExerciseId] = useState(null);
+  const [dragId, setDragId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const rowRefs = useRef({});
+  const longPressTimer = useRef(null);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const didLongPress = useRef(false);
+  const suppressClickRef = useRef(false);
   const workout = dayWorkouts.find((w) => w.id === activeWorkoutId) || dayWorkouts[0];
   const entries = workout ? workout.entries : [];
   const usedTemplate = (workout?.templateIds || []).length > 0;
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
+
+  const clearLongPressTimer = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
+  };
+
+  const handleRowTouchStart = (e, exId) => {
+    if (e.target.closest("button")) return;
+    const t = e.touches[0];
+    dragStartPos.current = { x: t.clientX, y: t.clientY };
+    didLongPress.current = false;
+    clearLongPressTimer();
+    longPressTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      setDragId(exId);
+      setDragOverId(exId);
+      if (navigator.vibrate) navigator.vibrate(10);
+    }, LONG_PRESS_MS);
+  };
+
+  const handleRowTouchMove = (e) => {
+    const t = e.touches[0];
+    if (!didLongPress.current) {
+      const dx = t.clientX - dragStartPos.current.x;
+      const dy = t.clientY - dragStartPos.current.y;
+      if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) clearLongPressTimer();
+      return;
+    }
+    const y = t.clientY;
+    let overId = null;
+    for (const entry of entries) {
+      const node = rowRefs.current[entry.exerciseId];
+      if (!node) continue;
+      const rect = node.getBoundingClientRect();
+      if (y >= rect.top && y <= rect.bottom) {
+        overId = entry.exerciseId;
+        break;
+      }
+    }
+    if (overId && overId !== dragOverId) setDragOverId(overId);
+  };
+
+  const handleRowTouchEnd = () => {
+    clearLongPressTimer();
+    if (didLongPress.current) {
+      suppressClickRef.current = true;
+      if (dragId && dragOverId && dragId !== dragOverId) {
+        const targetIndex = entries.findIndex((e) => e.exerciseId === dragOverId);
+        onReorderExercise(dragId, targetIndex);
+      }
+    }
+    didLongPress.current = false;
+    setDragId(null);
+    setDragOverId(null);
+  };
 
   return (
     <div className="flex flex-col h-full relative">
@@ -101,13 +166,34 @@ export function DayView({
             ? { reps: rec.recReps, weight: rec.recWeight }
             : null;
 
+          const isDragging = dragId === entry.exerciseId;
+          const isDropTarget = dragId && dragOverId === entry.exerciseId && dragId !== entry.exerciseId;
+
           return (
-            <div key={entry.exerciseId} className="py-4" style={{ borderBottom: "1.5px solid var(--line)" }}>
+            <div
+              key={entry.exerciseId}
+              ref={(node) => { rowRefs.current[entry.exerciseId] = node; }}
+              className="py-4"
+              style={{
+                borderBottom: "1.5px solid var(--line)",
+                borderTop: isDropTarget ? "1.5px solid var(--accent)" : "1.5px solid transparent",
+                opacity: isDragging ? 0.5 : 1,
+                background: isDragging ? "var(--surface)" : "transparent",
+              }}
+            >
               <div
-                onClick={() => setOpenExerciseId((cur) => (cur === entry.exerciseId ? null : entry.exerciseId))}
+                onClick={() => {
+                  if (suppressClickRef.current) { suppressClickRef.current = false; return; }
+                  setOpenExerciseId((cur) => (cur === entry.exerciseId ? null : entry.exerciseId));
+                }}
+                onTouchStart={(e) => handleRowTouchStart(e, entry.exerciseId)}
+                onTouchMove={handleRowTouchMove}
+                onTouchEnd={handleRowTouchEnd}
+                onTouchCancel={handleRowTouchEnd}
                 className="flex items-center justify-between gap-2 cursor-pointer"
               >
                 <div className="flex items-center gap-1.5 min-w-0">
+                  <GripVertical size={14} color="var(--text-dim)" style={{ flexShrink: 0 }} />
                   <ChevronRight
                     size={15}
                     color="var(--text-dim)"

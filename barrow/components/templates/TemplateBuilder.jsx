@@ -6,7 +6,7 @@ import { ExercisePicker } from "../exercises/ExercisePicker";
 
 // Bottom-sheet popup, same shape as AddCustomExerciseModal — a dark backdrop
 // with a panel sliding up from the bottom, rather than a full-screen page.
-export function TemplateBuilder({ exercises, onClose, onSave }) {
+export function TemplateBuilder({ exercises, onClose, onSave, onAddCustomExercise }) {
   const [name, setName] = useState("");
   const [picked, setPicked] = useState([]);
   const [exerciseView, setExerciseView] = useState("grouped");
@@ -82,6 +82,7 @@ export function TemplateBuilder({ exercises, onClose, onSave }) {
           alreadyPicked={picked}
           onPick={(ex) => setPicked((p) => (p.includes(ex.id) ? p : [...p, ex.id]))}
           onClose={() => setShowPicker(false)}
+          onAddCustom={onAddCustomExercise}
           doneLabel="Done"
         />
       )}

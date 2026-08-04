@@ -35,6 +35,20 @@ export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts
     onRemoveExercise: (exId) =>
       ensureWorkout((w) => ({ ...w, entries: w.entries.filter((e) => e.exerciseId !== exId) })),
 
+    // Drag-to-reorder: moves the entry for exId to sit at targetIndex among
+    // the other entries.
+    onReorderExercise: (exId, targetIndex) =>
+      ensureWorkout((w) => {
+        const fromIndex = w.entries.findIndex((e) => e.exerciseId === exId);
+        if (fromIndex === -1) return w;
+        const clampedIndex = Math.max(0, Math.min(targetIndex, w.entries.length - 1));
+        if (fromIndex === clampedIndex) return w;
+        const entries = [...w.entries];
+        const [moved] = entries.splice(fromIndex, 1);
+        entries.splice(clampedIndex, 0, moved);
+        return { ...w, entries };
+      }),
+
     // Swaps one exercise for another on this workout only — the template
     // (and any other workout that used it) is untouched. New exercise
     // starts fresh.
@@ -69,6 +83,7 @@ export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts
                     time: preset?.time ?? "",
                     speed: preset?.speed ?? "",
                     unit,
+                    warmup: false,
                   },
                 ],
               }

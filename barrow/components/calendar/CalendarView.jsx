@@ -33,9 +33,8 @@ export function CalendarView({ monthCursor, setMonthCursor, workouts, onSelectDa
           if (!date) return <div key={i} />;
           const key = toKey(date);
           const dayWorkouts = workouts[key] || [];
-          const setCount = dayWorkouts.reduce((sum, w) => sum + w.entries.reduce((s, e) => s + e.sets.length, 0), 0);
+          const workoutsDone = dayWorkouts.filter((w) => w.entries.some((e) => e.sets.length > 0)).length;
           const isToday = key === todayKey;
-          const dotOpacity = setCount === 0 ? 0 : setCount <= 3 ? 0.7 : setCount <= 8 ? 0.85 : 1;
           return (
             <button key={i} onClick={() => onSelectDay(key)} className="aspect-square flex flex-col items-center justify-center gap-1 active:opacity-50">
               <span
@@ -44,7 +43,7 @@ export function CalendarView({ monthCursor, setMonthCursor, workouts, onSelectDa
                   width: 22,
                   height: 22,
                   fontSize: 13,
-                  color: isToday ? "var(--accent)" : dayWorkouts.length > 0 ? "var(--text)" : "var(--text-dim)",
+                  color: isToday ? "var(--accent)" : workoutsDone > 0 ? "var(--text)" : "var(--text-dim)",
                   fontWeight: isToday ? 700 : 400,
                   borderRadius: 6,
                   border: isToday ? "1.5px solid var(--accent)" : "1.5px solid transparent",
@@ -52,7 +51,11 @@ export function CalendarView({ monthCursor, setMonthCursor, workouts, onSelectDa
               >
                 {date.getDate()}
               </span>
-              <span className="rounded-full" style={{ width: 4, height: 4, background: "var(--accent)", opacity: dotOpacity }} />
+              <span className="flex items-center justify-center gap-0.5" style={{ height: 4 }}>
+                {Array.from({ length: workoutsDone }).map((_, dotIdx) => (
+                  <span key={dotIdx} className="rounded-full" style={{ width: 4, height: 4, background: "var(--accent)" }} />
+                ))}
+              </span>
             </button>
           );
         })}

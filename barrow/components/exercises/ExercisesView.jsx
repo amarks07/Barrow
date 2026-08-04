@@ -9,7 +9,7 @@ import { ExerciseListRow } from "./ExerciseListRow";
 import { AddCustomExerciseModal } from "./AddCustomExerciseModal";
 import { CATEGORIES } from "../../lib/constants";
 
-export function ExercisesView({ exercises, exerciseView, setExerciseView, onOpenHistory, onAddCustom, onDeleteExercise }) {
+export function ExercisesView({ exercises, exerciseView, setExerciseView, onOpenHistory, onAddCustom, onDeleteExercise, active }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
@@ -58,7 +58,7 @@ export function ExercisesView({ exercises, exerciseView, setExerciseView, onOpen
         )}
       </div>
 
-      <FAB label="Add custom exercise" onClick={() => setShowAdd(true)} />
+      {active && <FAB label="Add custom exercise" onClick={() => setShowAdd(true)} />}
 
       {showAdd && (
         <AddCustomExerciseModal

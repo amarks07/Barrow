@@ -5,7 +5,7 @@ import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
 import { FAB } from "../ui/FAB";
 import { TemplateBuilder } from "./TemplateBuilder";
 
-export function TemplatesView({ templates, exercises, onCreate, onDelete, onOpenTemplate }) {
+export function TemplatesView({ templates, exercises, onCreate, onDelete, onOpenTemplate, active, onAddCustomExercise }) {
   const [showBuilder, setShowBuilder] = useState(false);
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
 
@@ -44,13 +44,14 @@ export function TemplatesView({ templates, exercises, onCreate, onDelete, onOpen
         ))}
       </div>
 
-      <FAB label="New template" onClick={() => setShowBuilder(true)} />
+      {active && <FAB label="New template" onClick={() => setShowBuilder(true)} />}
 
       {showBuilder && (
         <TemplateBuilder
           exercises={exercises}
           onClose={() => setShowBuilder(false)}
           onSave={(name, ids) => { onCreate(name, ids); setShowBuilder(false); }}
+          onAddCustomExercise={onAddCustomExercise}
         />
       )}
     </div>

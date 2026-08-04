@@ -9,7 +9,7 @@ import { ExercisePicker } from "../exercises/ExercisePicker";
 import { shortDayLabel } from "../../lib/date";
 import { exerciseMeta } from "../../lib/exercise-meta";
 
-export function TemplateDetailView({ template, exercises, workouts, onBack, onDelete, onRename, onSelectDate, onAddExercise, onRemoveExercise }) {
+export function TemplateDetailView({ template, exercises, workouts, onBack, onDelete, onRename, onSelectDate, onAddExercise, onRemoveExercise, onAddCustomExercise }) {
   const [showPicker, setShowPicker] = useState(false);
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
 
@@ -90,6 +90,7 @@ export function TemplateDetailView({ template, exercises, workouts, onBack, onDe
           alreadyPicked={template.exerciseIds}
           onPick={(ex) => onAddExercise(template.id, ex.id)}
           onClose={() => setShowPicker(false)}
+          onAddCustom={onAddCustomExercise}
           doneLabel="Done"
         />
       )}

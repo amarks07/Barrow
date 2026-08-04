@@ -53,42 +53,49 @@ export function getRecommendation(exerciseId, workouts, unit, excludeWorkoutId, 
   return null;
 }
 
-// Total weight×reps for a given exercise on each workout it was logged in —
+// Total weight×reps for a given exercise on each day it was logged —
 // the "volume" series the history chart plots, most recent 10 sessions.
+// A day can hold more than one workout, so same-day volume is summed into
+// one point rather than plotted twice (which would collide on the chart).
 export function getVolumeSeries(exerciseId, workouts, unit) {
-  const rows = [];
+  const byDate = new Map();
   flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
     const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
     if (!entry || entry.sets.length === 0) return;
     let volume = 0;
     entry.sets.forEach((s) => {
+      if (s.warmup) return;
       const wConv = convertWeight(s.weight, s.unit, unit);
       const wNum = wConv === "" ? 0 : wConv;
       const reps = parseFloat(s.reps) || 0;
       volume += wNum * reps;
     });
-    rows.push({ dateKey, volume });
+    byDate.set(dateKey, (byDate.get(dateKey) || 0) + volume);
   });
+  const rows = Array.from(byDate, ([dateKey, volume]) => ({ dateKey, volume }));
   rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
   return rows.slice(-10);
 }
 
-// Cardio equivalent: total distance (time × speed) per session, most recent
-// 10 sessions — the closest thing cardio has to "volume".
+// Cardio equivalent: total distance (time × speed) per day, most recent
+// 10 sessions — the closest thing cardio has to "volume". Same-day workouts
+// are summed into one point, as in getVolumeSeries above.
 export function getCardioDistanceSeries(exerciseId, workouts, unit) {
-  const rows = [];
+  const byDate = new Map();
   flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
     const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
     if (!entry || entry.sets.length === 0) return;
     let distance = 0;
     entry.sets.forEach((s) => {
+      if (s.warmup) return;
       const speedConv = convertSpeed(s.speed, s.unit, unit);
       const speedNum = speedConv === "" ? 0 : speedConv;
       const timeMin = parseFloat(s.time) || 0;
       distance += (timeMin / 60) * speedNum;
     });
-    rows.push({ dateKey, volume: distance });
+    byDate.set(dateKey, (byDate.get(dateKey) || 0) + distance);
   });
+  const rows = Array.from(byDate, ([dateKey, volume]) => ({ dateKey, volume }));
   rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
   return rows.slice(-10);
 }

@@ -14,11 +14,16 @@ export function HistoryView({ exercise, workouts, unit, onBack }) {
   const speedLabel = unit === "kg" ? "km/h" : "mph";
   const distanceLabel = unit === "kg" ? "km" : "mi";
 
+  // A day can hold more than one workout — keep each workout's sets in its
+  // own group (rather than flattening them together) so the "Set 1, 2, 3…"
+  // numbering and the day's visual layout both reflect separate sessions.
   const records = useMemo(() => {
     const out = [];
     Object.entries(workouts).forEach(([dateKey, dayWorkouts]) => {
-      const sets = dayWorkouts.flatMap((w) => w.entries.find((e) => e.exerciseId === exercise.id)?.sets || []);
-      if (sets.length) out.push({ dateKey, sets });
+      const groups = dayWorkouts
+        .map((w) => ({ workoutId: w.id, name: w.name, sets: w.entries.find((e) => e.exerciseId === exercise.id)?.sets || [] }))
+        .filter((g) => g.sets.length > 0);
+      if (groups.length) out.push({ dateKey, groups });
     });
     return out.sort((a, b) => (a.dateKey < b.dateKey ? 1 : -1));
   }, [workouts, exercise]);
@@ -51,18 +56,40 @@ export function HistoryView({ exercise, workouts, unit, onBack }) {
             No sets logged for this exercise yet.
           </p>
         )}
-        {records.map(({ dateKey, sets }) => (
+        {records.map(({ dateKey, groups }) => (
           <div key={dateKey} className="py-3" style={{ borderBottom: "1.5px solid var(--line)" }}>
             <div className="text-[11px] font-medium mb-1.5" style={{ color: "var(--text-dim)" }}>{shortDayLabel(dateKey)}</div>
-            <div>
-              {sets.map((s, i) => (
-                <div key={s.id} className="flex items-center justify-between text-[13px] tabular py-0.5" style={{ color: "var(--text)" }}>
-                  <span className="display text-[14px] uppercase" style={{ color: "var(--text-dim)" }}>Set {i + 1}</span>
-                  {isCardio ? (
-                    <span>{fmtNum(parseFloat(s.time) || 0)} min @ {fmtNum(convertSpeed(s.speed, s.unit, unit))} {speedLabel}</span>
-                  ) : (
-                    <span>{fmtNum(parseFloat(s.reps) || 0)} reps × {fmtNum(convertWeight(s.weight, s.unit, unit))} {unit}</span>
+            <div className="flex flex-col gap-3">
+              {groups.map((g, gi) => (
+                <div
+                  key={g.workoutId}
+                  style={groups.length > 1 ? { paddingLeft: 8, borderLeft: "1.5px solid var(--line-strong)" } : undefined}
+                >
+                  {groups.length > 1 && (
+                    <div className="display text-[10px] mb-1 uppercase" style={{ color: "var(--text-dim)" }}>
+                      {g.name || `Workout ${gi + 1}`}
+                    </div>
                   )}
+                  {g.sets.map((s, i) => (
+                    <div key={s.id} className="flex items-center justify-between text-[13px] tabular py-0.5" style={{ color: "var(--text)" }}>
+                      <span className="flex items-center gap-1.5">
+                        <span className="display text-[14px] uppercase" style={{ color: "var(--text-dim)" }}>Set {i + 1}</span>
+                        {s.warmup && (
+                          <span
+                            className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                            style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
+                          >
+                            Warmup
+                          </span>
+                        )}
+                      </span>
+                      {isCardio ? (
+                        <span>{fmtNum(parseFloat(s.time) || 0)} min @ {fmtNum(convertSpeed(s.speed, s.unit, unit))} {speedLabel}</span>
+                      ) : (
+                        <span>{fmtNum(parseFloat(s.reps) || 0)} reps × {fmtNum(convertWeight(s.weight, s.unit, unit))} {unit}</span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

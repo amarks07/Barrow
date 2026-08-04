@@ -53,10 +53,25 @@ export function SetCounters({ index, set, unit, isCardio, onUpdate, onRemove }) 
         <div className="display text-[14px] uppercase truncate" style={{ color: swipeArmed ? "var(--danger)" : "var(--text-dim)" }}>
           Set {index + 1}{swipeArmed ? " · swipe again to delete" : ""}
         </div>
-        <ConfirmDeleteButton
-          onConfirm={onRemove}
-          className="flex-shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
-        />
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={() => onUpdate("warmup", !set.warmup)}
+            aria-pressed={!!set.warmup}
+            aria-label="Mark as warmup set"
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
+            style={{
+              background: set.warmup ? "var(--accent)" : "var(--surface)",
+              color: set.warmup ? "#121214" : "var(--text-dim)",
+              border: "1.5px solid var(--line-strong)",
+            }}
+          >
+            Warmup
+          </button>
+          <ConfirmDeleteButton
+            onConfirm={onRemove}
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
+          />
+        </div>
       </div>
       <div className="flex flex-col gap-2">
         {isCardio ? <CardioFields set={set} unit={unit} onUpdate={onUpdate} /> : <StrengthFields set={set} unit={unit} onUpdate={onUpdate} />}
