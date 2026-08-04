@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, GripVertical, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, GripVertical, X } from "lucide-react";
 import { IconBtn } from "../ui/IconBtn";
 import { ConfirmDeleteButton } from "../ui/ConfirmDeleteButton";
 import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
@@ -15,6 +15,7 @@ import { dayLabel } from "../../lib/date";
 import { convertSpeed, convertWeight, fmtNum } from "../../lib/units";
 import { getRecommendation, getRepRange } from "../../lib/analytics";
 import { exerciseMeta } from "../../lib/exercise-meta";
+import { runInfo } from "../../lib/supersets";
 
 const LONG_PRESS_MS = 350;
 const MOVE_CANCEL_PX = 10;
@@ -24,7 +25,7 @@ export function DayView({
   onBack, onSelectWorkout, onCreateWorkout, onDeleteWorkout,
   onRename, onAddExercise, onRemoveExercise, onSwapExercise,
   onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory, onSaveAsTemplate, onSetAngle,
-  onAddCustomExercise, onReorderExercise,
+  onAddCustomExercise, onReorderExercise, onCreateSuperset,
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -33,6 +34,8 @@ export function DayView({
   const [openExerciseId, setOpenExerciseId] = useState(null);
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
+  const [supersetMode, setSupersetMode] = useState(false);
+  const [supersetSelection, setSupersetSelection] = useState([]);
   const rowRefs = useRef({});
   const longPressTimer = useRef(null);
   const dragStartPos = useRef({ x: 0, y: 0 });
@@ -42,6 +45,24 @@ export function DayView({
   const entries = workout ? workout.entries : [];
   const usedTemplate = (workout?.templateIds || []).length > 0;
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
+  const rowRuns = useMemo(() => runInfo(entries, (e) => e.supersetId ?? null), [entries]);
+  const draggingGroupIds = useMemo(() => {
+    if (!dragId) return new Set();
+    const dragged = entries.find((e) => e.exerciseId === dragId);
+    if (dragged?.supersetId) return new Set(entries.filter((e) => e.supersetId === dragged.supersetId).map((e) => e.exerciseId));
+    return new Set([dragId]);
+  }, [dragId, entries]);
+
+  const cancelSuperset = () => {
+    setSupersetMode(false);
+    setSupersetSelection([]);
+  };
+
+  const saveSuperset = () => {
+    if (supersetSelection.length >= 2) onCreateSuperset(supersetSelection);
+    setSupersetMode(false);
+    setSupersetSelection([]);
+  };
 
   const clearLongPressTimer = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -49,7 +70,7 @@ export function DayView({
   };
 
   const handleRowTouchStart = (e, exId) => {
-    if (e.target.closest("button")) return;
+    if (supersetMode || e.target.closest("button")) return;
     const t = e.touches[0];
     dragStartPos.current = { x: t.clientX, y: t.clientY };
     didLongPress.current = false;
@@ -89,8 +110,7 @@ export function DayView({
     if (didLongPress.current) {
       suppressClickRef.current = true;
       if (dragId && dragOverId && dragId !== dragOverId) {
-        const targetIndex = entries.findIndex((e) => e.exerciseId === dragOverId);
-        onReorderExercise(dragId, targetIndex);
+        onReorderExercise(dragId, dragOverId);
       }
     }
     didLongPress.current = false;
@@ -137,13 +157,54 @@ export function DayView({
         onCreate={onCreateWorkout}
       />
 
+      {(entries.length >= 2 || supersetMode) && (
+        <div className="px-5 pt-2 flex items-center justify-end gap-2">
+          {supersetMode ? (
+            <>
+              <span className="text-[11px] flex-1" style={{ color: "var(--text-dim)" }}>
+                {supersetSelection.length < 2
+                  ? "Select 2+ exercises to group"
+                  : `${supersetSelection.length} selected`}
+              </span>
+              <button
+                onClick={cancelSuperset}
+                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full flex-shrink-0"
+                style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveSuperset}
+                disabled={supersetSelection.length < 2}
+                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full flex-shrink-0"
+                style={{
+                  background: supersetSelection.length < 2 ? "var(--surface)" : "var(--accent)",
+                  color: supersetSelection.length < 2 ? "var(--text-dim)" : "#121214",
+                  border: "1.5px solid var(--line-strong)",
+                }}
+              >
+                Save
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => { setSupersetMode(true); setOpenExerciseId(null); }}
+              className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full flex-shrink-0"
+              style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
+            >
+              Superset
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-3" style={{ paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}>
         {entries.length === 0 && (
           <p className="text-[12px] py-3" style={{ color: "var(--text-dim)" }}>
             Tap "+ Add exercise" below, or "Load template" to get started.
           </p>
         )}
-        {entries.map((entry) => {
+        {entries.map((entry, entryIndex) => {
           const ex = exMap[entry.exerciseId];
           if (!ex) return null;
           const isCardio = ex.category === "Cardio";
@@ -166,8 +227,10 @@ export function DayView({
             ? { reps: rec.recReps, weight: rec.recWeight }
             : null;
 
-          const isDragging = dragId === entry.exerciseId;
+          const isDragging = draggingGroupIds.has(entry.exerciseId);
           const isDropTarget = dragId && dragOverId === entry.exerciseId && dragId !== entry.exerciseId;
+          const isSelected = supersetSelection.includes(entry.exerciseId);
+          const run = rowRuns[entryIndex];
 
           return (
             <div
@@ -175,14 +238,33 @@ export function DayView({
               ref={(node) => { rowRefs.current[entry.exerciseId] = node; }}
               className="py-4"
               style={{
+                position: "relative",
+                paddingRight: 12,
                 borderBottom: "1.5px solid var(--line)",
                 borderTop: isDropTarget ? "1.5px solid var(--accent)" : "1.5px solid transparent",
                 opacity: isDragging ? 0.5 : 1,
                 background: isDragging ? "var(--surface)" : "transparent",
               }}
             >
+              {run.isGrouped && (
+                <>
+                  {!run.isFirst && (
+                    <div style={{ position: "absolute", zIndex: 1, right: 3.25, top: -2, height: 20, width: 1.5, background: "var(--accent)" }} />
+                  )}
+                  {!run.isLast && (
+                    <div style={{ position: "absolute", zIndex: 1, right: 3.25, top: 18, bottom: -2, width: 1.5, background: "var(--accent)" }} />
+                  )}
+                  <div style={{ position: "absolute", zIndex: 1, right: 1, top: 15, width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }} />
+                </>
+              )}
               <div
                 onClick={() => {
+                  if (supersetMode) {
+                    setSupersetSelection((cur) =>
+                      cur.includes(entry.exerciseId) ? cur.filter((id) => id !== entry.exerciseId) : [...cur, entry.exerciseId]
+                    );
+                    return;
+                  }
                   if (suppressClickRef.current) { suppressClickRef.current = false; return; }
                   setOpenExerciseId((cur) => (cur === entry.exerciseId ? null : entry.exerciseId));
                 }}
@@ -191,14 +273,31 @@ export function DayView({
                 onTouchEnd={handleRowTouchEnd}
                 onTouchCancel={handleRowTouchEnd}
                 className="flex items-center justify-between gap-2 cursor-pointer"
+                style={{ flexWrap: "nowrap" }}
               >
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <GripVertical size={14} color="var(--text-dim)" style={{ flexShrink: 0 }} />
-                  <ChevronRight
-                    size={15}
-                    color="var(--text-dim)"
-                    style={{ flexShrink: 0, transition: "transform 0.15s", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)" }}
-                  />
+                  {supersetMode ? (
+                    <span
+                      className="flex items-center justify-center flex-shrink-0 rounded-full"
+                      style={{
+                        width: 18,
+                        height: 18,
+                        background: isSelected ? "var(--accent)" : "transparent",
+                        border: `1.5px solid ${isSelected ? "var(--accent)" : "var(--line-strong)"}`,
+                      }}
+                    >
+                      {isSelected && <Check size={12} color="#121214" />}
+                    </span>
+                  ) : (
+                    <>
+                      <GripVertical size={14} color="var(--text-dim)" style={{ flexShrink: 0 }} />
+                      <ChevronRight
+                        size={15}
+                        color="var(--text-dim)"
+                        style={{ flexShrink: 0, transition: "transform 0.15s", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+                      />
+                    </>
+                  )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className="text-[14px] font-medium truncate" style={{ color: "var(--text)" }}>{ex.name}</span>
@@ -216,27 +315,29 @@ export function DayView({
                     <div className="text-[10px] truncate" style={{ color: "var(--text-dim)" }}>{exerciseMeta(ex)}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onOpenHistory(entry.exerciseId); }}
-                    className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
-                    style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
-                  >
-                    History
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setSwapExId(entry.exerciseId); }}
-                    className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
-                    style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
-                  >
-                    Swap
-                  </button>
-                  <ConfirmDeleteButton
-                    onConfirm={() => onRemoveExercise(entry.exerciseId)}
-                    stopPropagation
-                    className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
-                  />
-                </div>
+                {!supersetMode && (
+                  <div className="flex items-center gap-1.5 flex-shrink-0" style={{ flexWrap: "nowrap" }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onOpenHistory(entry.exerciseId); }}
+                      className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
+                      style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
+                    >
+                      History
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSwapExId(entry.exerciseId); }}
+                      className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
+                      style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
+                    >
+                      Swap
+                    </button>
+                    <ConfirmDeleteButton
+                      onConfirm={() => onRemoveExercise(entry.exerciseId)}
+                      stopPropagation
+                      className="text-[10px] font-semibold px-2.5 py-1 rounded-full text-center"
+                    />
+                  </div>
+                )}
               </div>
 
               {isOpen && (

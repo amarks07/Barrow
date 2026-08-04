@@ -50,7 +50,7 @@ export function TemplatesView({ templates, exercises, onCreate, onDelete, onOpen
         <TemplateBuilder
           exercises={exercises}
           onClose={() => setShowBuilder(false)}
-          onSave={(name, ids) => { onCreate(name, ids); setShowBuilder(false); }}
+          onSave={(name, ids, supersets) => { onCreate(name, ids, supersets); setShowBuilder(false); }}
           onAddCustomExercise={onAddCustomExercise}
         />
       )}

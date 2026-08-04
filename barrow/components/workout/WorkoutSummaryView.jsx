@@ -1,11 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { IconBtn } from "../ui/IconBtn";
 import { WorkoutTabs } from "./WorkoutTabs";
 import { dayLabel } from "../../lib/date";
 import { convertSpeed, convertWeight, fmtNum } from "../../lib/units";
 import { exerciseMeta } from "../../lib/exercise-meta";
+import { runInfo } from "../../lib/supersets";
 
 // Read-only recap of a past day's workout(s) — editing a workout you already
 // finished is rare, so this avoids surfacing all the day-of logging controls
@@ -18,6 +20,7 @@ export function WorkoutSummaryView({
   const entries = workout ? workout.entries : [];
   const exMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const speedLabel = unit === "kg" ? "km/h" : "mph";
+  const rowRuns = useMemo(() => runInfo(entries, (e) => e.supersetId ?? null), [entries]);
 
   return (
     <div className="flex flex-col h-full relative">
@@ -47,13 +50,33 @@ export function WorkoutSummaryView({
         {entries.length === 0 && (
           <p className="text-[12px] py-3" style={{ color: "var(--text-dim)" }}>No exercises logged for this workout.</p>
         )}
-        {entries.map((entry) => {
+        {entries.map((entry, entryIndex) => {
           const ex = exMap[entry.exerciseId];
           if (!ex) return null;
           const isCardio = ex.category === "Cardio";
+          const run = rowRuns[entryIndex];
 
           return (
-            <div key={entry.exerciseId} className="py-4" style={{ borderBottom: "1.5px solid var(--line)" }}>
+            <div
+              key={entry.exerciseId}
+              className="py-4"
+              style={{
+                position: "relative",
+                paddingRight: run.isGrouped ? 12 : 0,
+                borderBottom: "1.5px solid var(--line)",
+              }}
+            >
+              {run.isGrouped && (
+                <>
+                  {!run.isFirst && (
+                    <div style={{ position: "absolute", zIndex: 1, right: 3.25, top: -2, height: 13, width: 1.5, background: "var(--accent)" }} />
+                  )}
+                  {!run.isLast && (
+                    <div style={{ position: "absolute", zIndex: 1, right: 3.25, top: 11, bottom: -2, width: 1.5, background: "var(--accent)" }} />
+                  )}
+                  <div style={{ position: "absolute", zIndex: 1, right: 1, top: 8, width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }} />
+                </>
+              )}
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-[14px] font-medium truncate" style={{ color: "var(--text)" }}>{ex.name}</span>
                 {ex.angles && (
