@@ -24,6 +24,8 @@ export function convertSpeed(value, fromUnit, toUnit) {
 }
 
 export const fmtNum = (n) => {
-  if (n === "" || n === null || n === undefined || Number.isNaN(n)) return "–";
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  if (n === "" || n === null || n === undefined) return "–";
+  const num = typeof n === "number" ? n : parseFloat(n);
+  if (Number.isNaN(num)) return "–";
+  return Number.isInteger(num) ? String(num) : num.toFixed(1);
 };

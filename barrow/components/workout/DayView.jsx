@@ -317,6 +317,10 @@ export function DayView({
           setExerciseView={() => {}}
           alreadyPicked={entries.map((e) => e.exerciseId)}
           onPick={(ex) => { onAddExercise(ex.id); setOpenExerciseId(ex.id); }}
+          onUnpick={(ex) => {
+            onRemoveExercise(ex.id);
+            setOpenExerciseId((cur) => (cur === ex.id ? null : cur));
+          }}
           onClose={() => setShowPicker(false)}
           onAddCustom={onAddCustomExercise}
           doneLabel="Add"

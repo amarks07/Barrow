@@ -3,7 +3,7 @@
 import { Check } from "lucide-react";
 import { exerciseMeta } from "../../lib/exercise-meta";
 
-export function ExerciseRows({ items, onPick, alreadyPicked }) {
+export function ExerciseRows({ items, onPick, onUnpick, alreadyPicked }) {
   return (
     <div className="grid grid-cols-2 gap-2">
       {items.map((ex) => {
@@ -11,7 +11,7 @@ export function ExerciseRows({ items, onPick, alreadyPicked }) {
         return (
           <button
             key={ex.id}
-            onClick={() => onPick(ex)}
+            onClick={() => (picked && onUnpick ? onUnpick(ex) : onPick(ex))}
             className="relative text-left p-3"
             style={{
               background: "var(--surface)",

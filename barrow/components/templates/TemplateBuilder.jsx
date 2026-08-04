@@ -81,6 +81,7 @@ export function TemplateBuilder({ exercises, onClose, onSave, onAddCustomExercis
           setExerciseView={setExerciseView}
           alreadyPicked={picked}
           onPick={(ex) => setPicked((p) => (p.includes(ex.id) ? p : [...p, ex.id]))}
+          onUnpick={(ex) => setPicked((p) => p.filter((id) => id !== ex.id))}
           onClose={() => setShowPicker(false)}
           onAddCustom={onAddCustomExercise}
           doneLabel="Done"

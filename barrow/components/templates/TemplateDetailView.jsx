@@ -89,6 +89,7 @@ export function TemplateDetailView({ template, exercises, workouts, onBack, onDe
           setExerciseView={() => {}}
           alreadyPicked={template.exerciseIds}
           onPick={(ex) => onAddExercise(template.id, ex.id)}
+          onUnpick={(ex) => onRemoveExercise(template.id, ex.id)}
           onClose={() => setShowPicker(false)}
           onAddCustom={onAddCustomExercise}
           doneLabel="Done"
