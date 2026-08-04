@@ -60,13 +60,13 @@ jobs:
               --notes "Automated Android build from commit ${{ github.sha }}."
           fi
 
-      - name: Sync displayed version on the download page
+      - name: Commit version bumps
         run: |
           sed -i "s/const APK_VERSION = \".*\";/const APK_VERSION = \"${{ steps.version.outputs.version }}\";/" apps/web/app/page.js
-          if ! git diff --quiet -- apps/web/app/page.js; then
+          if ! git diff --quiet -- apps/web/app/page.js apps/mobile/app.json; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add apps/web/app/page.js
-            git commit -m "Sync download page version to ${{ steps.version.outputs.version }}"
+            git add apps/web/app/page.js apps/mobile/app.json
+            git commit -m "Bump app version to ${{ steps.version.outputs.version }} and increment Android versionCode"
             git push
           fi
