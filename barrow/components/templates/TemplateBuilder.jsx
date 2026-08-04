@@ -100,7 +100,7 @@ export function TemplateBuilder({ exercises, onClose, onSave, onAddCustomExercis
                 className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full flex-shrink-0"
                 style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
               >
-                Superset
+                Create superset
               </button>
             )}
           </div>

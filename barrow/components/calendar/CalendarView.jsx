@@ -33,7 +33,17 @@ export function CalendarView({ monthCursor, setMonthCursor, workouts, onSelectDa
           if (!date) return <div key={i} />;
           const key = toKey(date);
           const dayWorkouts = workouts[key] || [];
-          const workoutsDone = dayWorkouts.filter((w) => w.entries.some((e) => e.sets.length > 0)).length;
+          // One dot per workout that day: accent for a workout with logged
+          // sets, white for one that has exercises added but no sets yet
+          // (e.g. a second workout tab started and left untouched). A
+          // workout with no exercises at all gets no dot.
+          const dots = dayWorkouts
+            .map((w) => {
+              if (w.entries.some((e) => e.sets.length > 0)) return "done";
+              if (w.entries.length > 0) return "empty";
+              return null;
+            })
+            .filter(Boolean);
           const isToday = key === todayKey;
           return (
             <button key={i} onClick={() => onSelectDay(key)} className="aspect-square flex flex-col items-center justify-center gap-1 active:opacity-50">
@@ -43,7 +53,7 @@ export function CalendarView({ monthCursor, setMonthCursor, workouts, onSelectDa
                   width: 22,
                   height: 22,
                   fontSize: 13,
-                  color: isToday ? "var(--accent)" : workoutsDone > 0 ? "var(--text)" : "var(--text-dim)",
+                  color: isToday ? "var(--accent)" : dots.length > 0 ? "var(--text)" : "var(--text-dim)",
                   fontWeight: isToday ? 700 : 400,
                   borderRadius: 6,
                   border: isToday ? "1.5px solid var(--accent)" : "1.5px solid transparent",
@@ -52,8 +62,12 @@ export function CalendarView({ monthCursor, setMonthCursor, workouts, onSelectDa
                 {date.getDate()}
               </span>
               <span className="flex items-center justify-center gap-0.5" style={{ height: 4 }}>
-                {Array.from({ length: workoutsDone }).map((_, dotIdx) => (
-                  <span key={dotIdx} className="rounded-full" style={{ width: 4, height: 4, background: "var(--accent)" }} />
+                {dots.map((status, dotIdx) => (
+                  <span
+                    key={dotIdx}
+                    className="rounded-full"
+                    style={{ width: 4, height: 4, background: status === "done" ? "var(--accent)" : "#FFFFFF" }}
+                  />
                 ))}
               </span>
             </button>

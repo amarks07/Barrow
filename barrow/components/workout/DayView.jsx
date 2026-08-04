@@ -119,7 +119,7 @@ export function DayView({
   };
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="flex flex-col h-full relative no-select">
       <div className="flex items-center gap-3 px-5 pt-4 pb-4" style={{ borderBottom: "1.5px solid var(--line)" }}>
         <IconBtn label="Back" onClick={onBack}><ArrowLeft size={17} /></IconBtn>
         <div className="flex-1 min-w-0">
@@ -192,7 +192,7 @@ export function DayView({
               className="text-[11px] font-semibold px-2.5 py-1.5 rounded-full flex-shrink-0"
               style={{ background: "var(--surface)", color: "var(--text-dim)", border: "1.5px solid var(--line-strong)" }}
             >
-              Superset
+              Create superset
             </button>
           )}
         </div>

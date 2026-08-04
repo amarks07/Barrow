@@ -31,6 +31,13 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   box-shadow: 3px 3px 0 rgba(0,0,0,0.35);
 }
 .tabular{font-variant-numeric: tabular-nums;}
+/* Long-press is a real gesture here (drag-to-reorder, superset selection),
+   so text must not compete with it for a native text-selection/callout menu. */
+.no-select{
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
 .no-scrollbar::-webkit-scrollbar{display:none;}
 .no-scrollbar{-ms-overflow-style:none; scrollbar-width:none;}
 input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
