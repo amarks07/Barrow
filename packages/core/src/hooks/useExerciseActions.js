@@ -1,0 +1,14 @@
+import { slug } from "../slug";
+
+export function useExerciseActions({ setExercises }) {
+  const addCustomExercise = (name, category, muscle) => {
+    const id = `custom-${slug(name)}-${Date.now()}`;
+    const exercise = { id, name, category, muscle: muscle || undefined, custom: true };
+    setExercises((prev) => [...prev, exercise]);
+    return exercise;
+  };
+
+  const deleteExercise = (id) => setExercises((prev) => prev.filter((e) => e.id !== id));
+
+  return { addCustomExercise, deleteExercise };
+}

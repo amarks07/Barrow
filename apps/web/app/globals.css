@@ -7,26 +7,16 @@
   --bg:#121214; --surface:#0C0C0E; --header-bg:#1E1E22; --text:#F5F3EE; --text-dim:#918F89;
   --accent:#FF5A36; --accent-deep:#B23F22; --line:#2C2B28; --line-strong:#6E6D67; --danger:#D8322F;
 }
-/* Light theme — accent/danger stay the same for brand consistency; only the
-   dark neutrals invert. Applied via [data-theme="light"] on <html>, set from
-   BarrowApp once the persisted preference has hydrated. */
-[data-theme="light"]{
-  --bg:#F0EDE6; --surface:#FFFFFF; --header-bg:#EAE6DC; --text:#1A1A1C; --text-dim:#6B6963;
-  --line:#E4E0D6; --line-strong:#8A8577;
-}
 html, body { background: var(--bg); }
 .font{font-family:'Inter',sans-serif;}
 .display{font-family:'Bebas Neue',sans-serif; letter-spacing:0.03em;}
-/* Decorative dividers (--line, ~1.3:1) don't need to meet contrast minimums —
-   but interactive boundaries like input underlines use --line-strong (~3.3:1)
-   to meet WCAG 1.4.11 non-text contrast. Focus rings are restored here since
-   inputs/buttons suppress the default outline for a cleaner look at rest. */
-button:focus-visible, input:focus-visible, a:focus-visible {
+button:focus-visible, a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* Signature look: sharp-cornered bordered cards with a hard offset shadow
-   for content, contrasted with fully-round pill CTAs — see .pill below. */
+/* Signature look, carried over from the app itself: sharp-cornered
+   bordered cards with a hard offset shadow, contrasted with fully-round
+   pill CTAs — see .pill below. */
 .card{
   background: var(--surface);
   border-radius: 10px;
@@ -37,18 +27,5 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   border: 2px solid rgba(0,0,0,0.3);
   box-shadow: 3px 3px 0 rgba(0,0,0,0.35);
 }
-.tabular{font-variant-numeric: tabular-nums;}
-/* Long-press is a real gesture here (drag-to-reorder, superset selection),
-   so text must not compete with it for a native text-selection/callout menu. */
-.no-select{
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-.no-scrollbar::-webkit-scrollbar{display:none;}
-.no-scrollbar{-ms-overflow-style:none; scrollbar-width:none;}
-input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
-input[type=number]{-moz-appearance:textfield;}
-input, select, textarea { font-size: 16px; }
 
 html, body, #__next { height: 100%; }
