@@ -10,9 +10,11 @@ import { ExercisesView } from "../components/exercises/ExercisesView";
 import { TemplatesView } from "../components/templates/TemplatesView";
 import { TemplateDetailView } from "../components/templates/TemplateDetailView";
 import { DayView } from "../components/workout/DayView";
+import { ExerciseFocusView } from "../components/workout/ExerciseFocusView";
 import { WorkoutSummaryView } from "../components/workout/WorkoutSummaryView";
 import { HistoryView } from "../components/history/HistoryView";
 import { ProfileView } from "../components/profile/ProfileView";
+import { PreferencesView } from "../components/preferences/PreferencesView";
 import { SignInModal } from "../components/profile/SignInModal";
 import { ResetPasswordModal } from "../components/profile/ResetPasswordModal";
 
@@ -42,6 +44,9 @@ export default function BarrowApp() {
   const [templates, setTemplates] = usePersistedState("barrow:templates", []);
   const [workouts, setWorkouts] = usePersistedState("barrow:workouts", {}, WORKOUTS_CODEC);
   const [unit, setUnit] = usePersistedState("barrow:unit", "lb", RAW_UNIT_CODEC);
+  const [theme, setTheme] = usePersistedState("barrow:theme", "dark", RAW_UNIT_CODEC);
+  const [workoutView, setWorkoutView] = usePersistedState("barrow:workoutView", "classic", RAW_UNIT_CODEC);
+  const [focusSupersetGrouping, setFocusSupersetGrouping] = usePersistedState("barrow:focusSupersetGrouping", "together", RAW_UNIT_CODEC);
   const [profile, setProfile] = usePersistedState("barrow:profile", () => ({
     firstName: "",
     lastName: "",
@@ -60,15 +65,18 @@ export default function BarrowApp() {
   const [historyExId, setHistoryExId] = useState(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [focusExerciseId, setFocusExerciseId] = useState(null);
   const [pastEditOverride, setPastEditOverride] = useState(false);
 
   const idRef = useRef(0);
   const nextId = () => `s${Date.now()}-${idRef.current++}`;
 
   // History and day view take over the whole screen; template detail sits
-  // "under" a day view so returning from a day drops back into it.
-  const view = historyExId ? "history" : selectedDate ? "day" : selectedTemplateId ? "templateDetail" : tab;
-  const showChrome = view !== "day" && view !== "history" && view !== "templateDetail";
+  // "under" a day view so returning from a day drops back into it. The
+  // per-exercise focus view sits "under" a day view the same way.
+  const view = historyExId ? "history" : focusExerciseId ? "exerciseFocus" : selectedDate ? "day" : selectedTemplateId ? "templateDetail" : tab;
+  const showChrome = !["day", "history", "templateDetail", "exerciseFocus"].includes(view);
   // Past days open to a read-only recap instead of the full editor; "Edit"
   // on that recap flips this to drop into the normal DayView.
   const isPastDay = view === "day" && selectedDate < toKey(new Date());
@@ -97,6 +105,13 @@ export default function BarrowApp() {
     if (selectedTemplateId && !templates.some((t) => t.id === selectedTemplateId)) setSelectedTemplateId(null);
   }, [templates, selectedTemplateId]);
 
+  // Theme lives on <html> (not a div inside it) so html/body's own
+  // background — and anything rendered outside the app's wrapper — matches
+  // too, not just the app content.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
   // Opens a date's workout list: resumes the most recently added workout if
   // the date already has one, otherwise starts a fresh one.
   const openDate = (dateKey) => {
@@ -121,7 +136,7 @@ export default function BarrowApp() {
   return (
     <div className="w-full flex justify-center font" style={{ background: "var(--bg)", height: "100dvh" }}>
       <div className="relative w-full max-w-[420px] h-full flex flex-col">
-        <AppHeader unit={unit} onUnitChange={setUnit} profile={profile} onOpenProfile={() => setProfileOpen(true)} />
+        <AppHeader profile={profile} onOpenProfile={() => setProfileOpen(true)} onOpenPreferences={() => setPreferencesOpen(true)} />
 
         <div className="flex-1 min-h-0 relative pt-3">
           {(view === "calendar" || view === "exercises" || view === "templates") && (
@@ -207,7 +222,26 @@ export default function BarrowApp() {
               onOpenHistory={setHistoryExId}
               onSaveAsTemplate={templateActions.saveWorkoutAsTemplate}
               onAddCustomExercise={exerciseActions.addCustomExercise}
+              workoutView={workoutView}
+              onOpenExerciseFocus={setFocusExerciseId}
               {...workoutActions}
+            />
+          )}
+
+          {view === "exerciseFocus" && (
+            <ExerciseFocusView
+              dayWorkouts={workouts[selectedDate] || []}
+              activeWorkoutId={selectedWorkoutId}
+              initialExerciseId={focusExerciseId}
+              exercises={exercises}
+              unit={unit}
+              workouts={workouts}
+              onBack={() => setFocusExerciseId(null)}
+              onSetAngle={workoutActions.onSetAngle}
+              onAddSet={workoutActions.onAddSet}
+              onUpdateSet={workoutActions.onUpdateSet}
+              onRemoveSet={workoutActions.onRemoveSet}
+              groupSupersets={focusSupersetGrouping !== "separate"}
             />
           )}
 
@@ -239,6 +273,20 @@ export default function BarrowApp() {
         )}
 
         {cloudSync.recoveryMode && <ResetPasswordModal cloudSync={cloudSync} />}
+
+        {preferencesOpen && (
+          <PreferencesView
+            unit={unit}
+            onUnitChange={setUnit}
+            theme={theme}
+            onThemeChange={setTheme}
+            workoutView={workoutView}
+            onWorkoutViewChange={setWorkoutView}
+            focusSupersetGrouping={focusSupersetGrouping}
+            onFocusSupersetGroupingChange={setFocusSupersetGrouping}
+            onClose={() => setPreferencesOpen(false)}
+          />
+        )}
       </div>
     </div>
   );

@@ -66,7 +66,7 @@ export function CalendarView({ monthCursor, setMonthCursor, workouts, onSelectDa
                   <span
                     key={dotIdx}
                     className="rounded-full"
-                    style={{ width: 4, height: 4, background: status === "done" ? "var(--accent)" : "#FFFFFF" }}
+                    style={{ width: 4, height: 4, background: status === "done" ? "var(--accent)" : "var(--text)" }}
                   />
                 ))}
               </span>

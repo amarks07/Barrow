@@ -7,6 +7,13 @@
   --bg:#121214; --surface:#0C0C0E; --header-bg:#1E1E22; --text:#F5F3EE; --text-dim:#918F89;
   --accent:#FF5A36; --accent-deep:#B23F22; --line:#2C2B28; --line-strong:#6E6D67; --danger:#D8322F;
 }
+/* Light theme — accent/danger stay the same for brand consistency; only the
+   dark neutrals invert. Applied via [data-theme="light"] on <html>, set from
+   BarrowApp once the persisted preference has hydrated. */
+[data-theme="light"]{
+  --bg:#F0EDE6; --surface:#FFFFFF; --header-bg:#EAE6DC; --text:#1A1A1C; --text-dim:#6B6963;
+  --line:#E4E0D6; --line-strong:#8A8577;
+}
 html, body { background: var(--bg); }
 .font{font-family:'Inter',sans-serif;}
 .display{font-family:'Bebas Neue',sans-serif; letter-spacing:0.03em;}

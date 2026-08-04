@@ -25,7 +25,7 @@ export function DayView({
   onBack, onSelectWorkout, onCreateWorkout, onDeleteWorkout,
   onRename, onAddExercise, onRemoveExercise, onSwapExercise,
   onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory, onSaveAsTemplate, onSetAngle,
-  onAddCustomExercise, onReorderExercise, onCreateSuperset,
+  onAddCustomExercise, onReorderExercise, onCreateSuperset, workoutView, onOpenExerciseFocus,
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -208,7 +208,7 @@ export function DayView({
           const ex = exMap[entry.exerciseId];
           if (!ex) return null;
           const isCardio = ex.category === "Cardio";
-          const isOpen = openExerciseId === entry.exerciseId;
+          const isOpen = workoutView !== "focus" && openExerciseId === entry.exerciseId;
           const lastSet = entry.sets[entry.sets.length - 1];
           const { repLow, repHigh } = getRepRange(entry.exerciseId, workouts, workout.id);
           const rec = !isCardio && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workout.id, repLow, repHigh) : null;
@@ -266,7 +266,8 @@ export function DayView({
                     return;
                   }
                   if (suppressClickRef.current) { suppressClickRef.current = false; return; }
-                  setOpenExerciseId((cur) => (cur === entry.exerciseId ? null : entry.exerciseId));
+                  if (workoutView === "focus") onOpenExerciseFocus(entry.exerciseId);
+                  else setOpenExerciseId((cur) => (cur === entry.exerciseId ? null : entry.exerciseId));
                 }}
                 onTouchStart={(e) => handleRowTouchStart(e, entry.exerciseId)}
                 onTouchMove={handleRowTouchMove}
@@ -291,11 +292,13 @@ export function DayView({
                   ) : (
                     <>
                       <GripVertical size={14} color="var(--text-dim)" style={{ flexShrink: 0 }} />
-                      <ChevronRight
-                        size={15}
-                        color="var(--text-dim)"
-                        style={{ flexShrink: 0, transition: "transform 0.15s", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)" }}
-                      />
+                      {workoutView !== "focus" && (
+                        <ChevronRight
+                          size={15}
+                          color="var(--text-dim)"
+                          style={{ flexShrink: 0, transition: "transform 0.15s", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+                        />
+                      )}
                     </>
                   )}
                   <div className="min-w-0">

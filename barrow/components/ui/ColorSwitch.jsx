@@ -2,7 +2,7 @@
 
 export function ColorSwitch({ value, options, onChange }) {
   return (
-    <div className="flex items-center p-0.5 rounded-full" style={{ background: "var(--surface)", border: "1.5px solid var(--line-strong)" }}>
+    <div className="inline-flex items-center p-0.5 rounded-full" style={{ background: "var(--surface)", border: "1.5px solid var(--line-strong)" }}>
       {options.map((opt) => {
         const active = value === opt.value;
         return (
