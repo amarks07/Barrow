@@ -216,10 +216,10 @@ function WorkoutEntryRow({
             </Text>
           )}
 
-          {entry.sets.map((set, i) => (
+          {entry.sets.map((set) => (
             <SetCounters
               key={set.id}
-              index={i}
+              sets={entry.sets}
               set={set}
               unit={unit}
               isCardio={isCardio}
@@ -643,6 +643,7 @@ export function DayView({
         label="Load template"
         onPress={() => setShowTemplates(true)}
         variant="solid"
+        size="medium"
         style={{ position: "absolute", right: 20, bottom: 20 + insets.bottom, zIndex: 25 }}
       />
 

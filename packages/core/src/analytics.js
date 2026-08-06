@@ -77,6 +77,37 @@ export function getVolumeSeries(exerciseId, workouts, unit) {
   return rows.slice(-10);
 }
 
+// Personal-record weight for an exercise, plus the most sets ever done at
+// that weight in a single workout — e.g. "225 lb PR · 3 sets (best)".
+export function getWeightPR(exerciseId, workouts, unit) {
+  const sessions = flattenWorkouts(workouts)
+    .map(({ workout }) => workout.entries.find((e) => e.exerciseId === exerciseId))
+    .filter((entry) => entry && entry.sets.length > 0);
+
+  let maxWeight = 0;
+  sessions.forEach((entry) => {
+    entry.sets.forEach((s) => {
+      if (s.warmup) return;
+      const wConv = convertWeight(s.weight, s.unit, unit);
+      const wNum = wConv === "" ? 0 : wConv;
+      if (wNum > maxWeight) maxWeight = wNum;
+    });
+  });
+  if (maxWeight <= 0) return null;
+
+  let bestSetCount = 0;
+  sessions.forEach((entry) => {
+    const count = entry.sets.filter((s) => {
+      if (s.warmup) return false;
+      const wConv = convertWeight(s.weight, s.unit, unit);
+      return (wConv === "" ? 0 : wConv) === maxWeight;
+    }).length;
+    if (count > bestSetCount) bestSetCount = count;
+  });
+
+  return { weight: maxWeight, sets: bestSetCount };
+}
+
 // Cardio equivalent: total distance (time × speed) per day, most recent
 // 10 sessions — the closest thing cardio has to "volume". Same-day workouts
 // are summed into one point, as in getVolumeSeries above.

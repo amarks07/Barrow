@@ -56,10 +56,10 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAdd
         </Text>
       )}
 
-      {entry.sets.map((set, i) => (
+      {entry.sets.map((set) => (
         <SetCounters
           key={set.id}
-          index={i}
+          sets={entry.sets}
           set={set}
           unit={unit}
           isCardio={isCardio}
@@ -215,6 +215,7 @@ export function ExerciseFocusView({
           onPress={() => goTo(Math.max(0, clampedIndex - 1))}
           disabled={clampedIndex === 0}
           variant="solid"
+          size="medium"
           icon={<ChevronLeft size={16} color={clampedIndex === 0 ? tokens.textDim : "#121214"} />}
         />
         <Button
@@ -222,6 +223,7 @@ export function ExerciseFocusView({
           onPress={() => goTo(Math.min(steps.length - 1, clampedIndex + 1))}
           disabled={clampedIndex === steps.length - 1}
           variant="solid"
+          size="medium"
           trailingIcon={<ChevronRight size={16} color={clampedIndex === steps.length - 1 ? tokens.textDim : "#121214"} />}
         />
       </View>

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Modal, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -10,16 +10,27 @@ export function SaveAsTemplateModal({ onClose, onSave }) {
   const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
 
+  const slideAnim = useRef(new Animated.Value(1000)).current;
+  useEffect(() => {
+    Animated.timing(slideAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start();
+  }, [slideAnim]);
+
   return (
-    <Modal transparent animationType="slide" visible onRequestClose={onClose}>
+    <Modal transparent animationType="none" visible onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)" }}
           onPress={onClose}
         />
-        <View
+        <Animated.View
           className="p-5"
-          style={{ backgroundColor: tokens.bg, borderTopWidth: 1.5, borderTopColor: tokens.line, paddingBottom: Math.max(20, insets.bottom) }}
+          style={{
+            backgroundColor: tokens.bg,
+            borderTopWidth: 1.5,
+            borderTopColor: tokens.line,
+            paddingBottom: Math.max(20, insets.bottom),
+            transform: [{ translateY: slideAnim }],
+          }}
         >
           <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: tokens.text }} className="mb-1">
             Save as template
@@ -68,7 +79,7 @@ export function SaveAsTemplateModal({ onClose, onSave }) {
               </Text>
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );

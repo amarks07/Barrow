@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft } from "lucide-react-native";
-import { convertSpeed, convertWeight, exerciseMeta, fmtNum, getCardioDistanceSeries, getVolumeSeries, shortDayLabel } from "@barrow/core";
+import { convertSpeed, convertWeight, exerciseMeta, fmtNum, getCardioDistanceSeries, getVolumeSeries, getWeightPR, shortDayLabel } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { VolumeChart } from "./VolumeChart";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -34,6 +34,11 @@ export function HistoryView({ exercise, workouts, unit, onBack }) {
     [workouts, exercise, unit, isCardio]
   );
 
+  const weightPR = useMemo(
+    () => (isCardio ? null : getWeightPR(exercise.id, workouts, unit)),
+    [workouts, exercise, unit, isCardio]
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: tokens.bg }}>
       <View
@@ -49,6 +54,26 @@ export function HistoryView({ exercise, workouts, unit, onBack }) {
         </View>
       </View>
       <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 24 + insets.bottom }}>
+        {weightPR && (
+          <View className="flex-row mb-5" style={{ gap: 10 }}>
+            <View className="flex-1 rounded-[10px] px-3 py-2.5" style={{ backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.line }}>
+              <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 10, textTransform: "uppercase", color: tokens.textDim }} className="mb-1">
+                PR Weight
+              </Text>
+              <Text style={{ fontSize: 18, fontWeight: "600", color: tokens.text, fontVariant: ["tabular-nums"] }}>
+                {fmtNum(weightPR.weight)} {unit}
+              </Text>
+            </View>
+            <View className="flex-1 rounded-[10px] px-3 py-2.5" style={{ backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.line }}>
+              <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 10, textTransform: "uppercase", color: tokens.textDim }} className="mb-1">
+                Best Sets @ PR
+              </Text>
+              <Text style={{ fontSize: 18, fontWeight: "600", color: tokens.text, fontVariant: ["tabular-nums"] }}>
+                {weightPR.sets}
+              </Text>
+            </View>
+          </View>
+        )}
         {volumeSeries.length > 0 && (
           <View className="mb-5">
             <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 13, textTransform: "uppercase", color: tokens.textDim }} className="mb-1">

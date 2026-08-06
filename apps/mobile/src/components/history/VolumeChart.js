@@ -26,10 +26,45 @@ export function VolumeChart({ data }) {
     return `${m}/${d}`;
   };
 
+  // Least-squares trend line over the plotted points.
+  const n = points.length;
+  const sumX = points.reduce((s, p) => s + p.x, 0);
+  const sumY = points.reduce((s, p) => s + p.y, 0);
+  const sumXY = points.reduce((s, p) => s + p.x * p.y, 0);
+  const sumXX = points.reduce((s, p) => s + p.x * p.x, 0);
+  const denom = n * sumXX - sumX * sumX;
+  const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+  const intercept = n !== 0 ? (sumY - slope * sumX) / n : 0;
+  const trendX1 = padX;
+  const trendX2 = W - padX;
+
   return (
     <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H}>
       <Line x1={padX} y1={padTop + plotH} x2={W - padX} y2={padTop + plotH} stroke={tokens.line} strokeWidth="1" />
-      {data.length > 1 && <Polyline points={linePoints} fill="none" stroke={tokens.line} strokeWidth="1.5" />}
+      {points.map((p) => (
+        <Line
+          key={`stem-${p.dateKey}`}
+          x1={p.x}
+          y1={padTop + plotH}
+          x2={p.x}
+          y2={p.y}
+          stroke={tokens.line}
+          strokeWidth="1"
+        />
+      ))}
+      {data.length > 1 && (
+        <Polyline points={linePoints} fill="none" stroke={tokens.line} strokeWidth="2" strokeDasharray="4,3" />
+      )}
+      {data.length > 1 && (
+        <Line
+          x1={trendX1}
+          y1={slope * trendX1 + intercept}
+          x2={trendX2}
+          y2={slope * trendX2 + intercept}
+          stroke={tokens.accent}
+          strokeWidth="1.5"
+        />
+      )}
       {points.map((p, i) => {
         const isLast = i === points.length - 1;
         return (

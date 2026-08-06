@@ -8,10 +8,17 @@ import { CardioFields } from "./CardioFields";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
-export function SetCounters({ index, set, unit, isCardio, onUpdate, onRemove, autoFocusField }) {
+export function SetCounters({ sets, set, unit, isCardio, onUpdate, onRemove, autoFocusField }) {
   const { tokens } = useTheme();
   const [swipeArmed, setSwipeArmed] = useState(false);
   const armedTimeout = useRef(null);
+
+  // Numbered within its own type (warmup vs working) rather than by raw
+  // position in the exercise's set list — so toggling an earlier set's
+  // warmup flag renumbers the working sets after it instead of leaving a
+  // gap, and vice versa.
+  const sameTypeSets = sets.filter((s) => !!s.warmup === !!set.warmup);
+  const displayNumber = sameTypeSets.findIndex((s) => s.id === set.id) + 1;
 
   useEffect(
     () => () => {
@@ -51,7 +58,10 @@ export function SetCounters({ index, set, unit, isCardio, onUpdate, onRemove, au
         style={{
           borderWidth: 1.5,
           borderColor: swipeArmed ? tokens.danger : tokens.lineStrong,
-          backgroundColor: swipeArmed ? "rgba(216,50,47,0.08)" : "transparent",
+          // Warmup sets get a faint light-gray wash so they read as
+          // distinct from working sets at a glance, without competing with
+          // the swipe-to-delete red tint above.
+          backgroundColor: swipeArmed ? "rgba(216,50,47,0.08)" : set.warmup ? "rgba(255,255,255,0.06)" : "transparent",
         }}
       >
         <View className="flex-row items-center justify-between gap-2 mb-2">
@@ -63,7 +73,7 @@ export function SetCounters({ index, set, unit, isCardio, onUpdate, onRemove, au
               color: swipeArmed ? tokens.danger : tokens.textDim,
             }}
           >
-            Set {index + 1}
+            {set.warmup ? "Warmup" : "Working Set"} {displayNumber}
             {swipeArmed ? " · swipe again to delete" : ""}
           </Text>
           <View className="flex-row items-center gap-1.5">

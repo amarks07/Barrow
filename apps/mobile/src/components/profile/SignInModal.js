@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Modal, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -10,7 +10,10 @@ const TITLES = { signin: "Sign in", signup: "Create account", forgot: "Reset pas
 
 // Shown instead of the profile screen whenever there's no signed-in
 // session. Same overlay-with-backdrop treatment as AddCustomExerciseModal/
-// TemplateBuilder, just anchored to the top instead of the bottom.
+// TemplateBuilder, just anchored to the top instead of the bottom. Modal's
+// built-in animationType="slide" always enters from the bottom of the
+// screen regardless of where the content sits, so the panel drives its own
+// slide-down-from-top animation instead.
 export function SignInModal({ cloudSync, onClose }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -18,6 +21,11 @@ export function SignInModal({ cloudSync, onClose }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { available, status, error, signIn, signUp, resetPassword } = cloudSync;
+
+  const slideAnim = useRef(new Animated.Value(-1000)).current;
+  useEffect(() => {
+    Animated.timing(slideAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start();
+  }, [slideAnim]);
 
   const busy = status === "authenticating";
   const done = status === "confirm-email" || status === "reset-email-sent";
@@ -30,15 +38,21 @@ export function SignInModal({ cloudSync, onClose }) {
   };
 
   return (
-    <Modal transparent animationType="slide" visible onRequestClose={onClose}>
+    <Modal transparent animationType="none" visible onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: "flex-start" }}>
         <Pressable
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)" }}
           onPress={onClose}
         />
-        <View
+        <Animated.View
           className="p-5"
-          style={{ backgroundColor: tokens.bg, borderBottomWidth: 1.5, borderBottomColor: tokens.line, paddingTop: insets.top + 20 }}
+          style={{
+            backgroundColor: tokens.bg,
+            borderBottomWidth: 1.5,
+            borderBottomColor: tokens.line,
+            paddingTop: insets.top + 20,
+            transform: [{ translateY: slideAnim }],
+          }}
         >
           <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: tokens.text }} className="mb-4">
             {TITLES[mode]}
@@ -130,10 +144,11 @@ export function SignInModal({ cloudSync, onClose }) {
                 onPress={submit}
                 disabled={busy}
                 variant="solid"
+                size="medium"
               />
             )}
           </View>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );

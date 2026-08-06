@@ -5,9 +5,11 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 
 // Standard action button, used for everything from "History"/"Swap"/"Save
 // as template" up through modal "Cancel"/"Save" buttons and the app's
-// prominent CTAs. Two sizes only: `small` (the default — matches what the
-// Day view's action row already looked like) and `large` (reserved for a
-// screen's one standout CTA, like Calendar's "Start a workout").
+// prominent CTAs. Three sizes: `small` (the default — matches what the Day
+// view's action row already looked like), `medium` (a modal/screen's one
+// primary action alongside other controls), and `large` (reserved for a
+// screen's one standout CTA, like Calendar's "Start a workout"). See
+// BUTTON_HEIGHT/BUTTON_FONT_SIZE/BUTTON_PADDING_H in theme/dimensions.js.
 //
 // variant:
 //   "outline"       — surface background, border, dim label (History, Swap,

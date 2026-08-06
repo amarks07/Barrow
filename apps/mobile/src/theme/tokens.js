@@ -4,7 +4,7 @@
 // StatusBar style, icon `color` props).
 export const THEME_TOKENS = {
   dark: {
-    bg: "#d1d1e6",
+    bg: "#121214",
     surface: "#0C0C0E",
     header: "#1E1E22",
     text: "#F5F3EE",

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Dimensions, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Dimensions, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, X } from "lucide-react-native";
@@ -56,16 +56,28 @@ export function TemplateBuilder({ exercises, onClose, onSave, onAddCustomExercis
 
   const maxHeight = Dimensions.get("window").height * 0.8;
 
+  const slideAnim = useRef(new Animated.Value(1000)).current;
+  useEffect(() => {
+    Animated.timing(slideAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start();
+  }, [slideAnim]);
+
   return (
-    <Modal transparent animationType="slide" visible onRequestClose={onClose}>
+    <Modal transparent animationType="none" visible onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)" }}
           onPress={onClose}
         />
-        <View
+        <Animated.View
           className="p-5"
-          style={{ backgroundColor: tokens.bg, borderTopWidth: 1.5, borderTopColor: tokens.line, maxHeight, paddingBottom: Math.max(20, insets.bottom) }}
+          style={{
+            backgroundColor: tokens.bg,
+            borderTopWidth: 1.5,
+            borderTopColor: tokens.line,
+            maxHeight,
+            paddingBottom: Math.max(20, insets.bottom),
+            transform: [{ translateY: slideAnim }],
+          }}
         >
           <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: tokens.text }} className="mb-4">
             New template
@@ -207,38 +219,16 @@ export function TemplateBuilder({ exercises, onClose, onSave, onAddCustomExercis
           </Pressable>
 
           <View className="flex-row items-center justify-between">
-            <Pressable onPress={onClose}>
-              <Text
-                style={{
-                  fontFamily: FONT_DISPLAY,
-                  fontSize: 13,
-                  lineHeight: 13,
-                  textTransform: "uppercase",
-                  includeFontPadding: false,
-                  textAlignVertical: "center",
-                  color: tokens.textDim,
-                }}
-              >
-                Cancel
-              </Text>
-            </Pressable>
-            <Pressable onPress={() => canSave && onSave(name.trim(), picked, supersets)} disabled={!canSave}>
-              <Text
-                style={{
-                  fontFamily: FONT_DISPLAY,
-                  fontSize: 13,
-                  lineHeight: 13,
-                  textTransform: "uppercase",
-                  includeFontPadding: false,
-                  textAlignVertical: "center",
-                  color: canSave ? tokens.text : tokens.textDim,
-                }}
-              >
-                Save
-              </Text>
-            </Pressable>
+            <Button label="Cancel" onPress={onClose} size="medium" />
+            <Button
+              label="Save"
+              onPress={() => canSave && onSave(name.trim(), picked, supersets)}
+              disabled={!canSave}
+              variant="solid"
+              size="medium"
+            />
           </View>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
 
       {showPicker && (
