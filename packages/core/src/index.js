@@ -6,6 +6,9 @@ export * from "./supersets";
 export * from "./analytics";
 export * from "./exercise-meta";
 export * from "./constants";
+export * from "./focusSteps";
+export * from "./workoutMutations";
+export * from "./focusStorage";
 
 export * from "./hooks/useExerciseActions";
 export * from "./hooks/useWorkoutActions";

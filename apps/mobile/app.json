@@ -29,7 +29,28 @@
     },
     "plugins": [
       "expo-font",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "./plugins/withNotifeeAndroidMavenRepo.js",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "FocusWidget",
+              "label": "Barrow Focus",
+              "description": "Track sets for the workout open in Focus flow.",
+              "minWidth": "220dp",
+              "minHeight": "150dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "320dp",
+              "maxResizeHeight": "420dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ]
     ],
     "extra": {
       "eas": {

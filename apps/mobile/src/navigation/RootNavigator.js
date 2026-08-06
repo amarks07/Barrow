@@ -2,7 +2,11 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { MainStack } from "./MainStack";
 import { PreferencesScreen } from "../screens/preferences/PreferencesScreen";
 import { ProfileScreen } from "../screens/profile/ProfileScreen";
+import { withKeyboardAvoiding } from "./withKeyboardAvoiding";
 import { useTheme } from "../theme/ThemeProvider";
+
+const KeyboardAvoidingPreferences = withKeyboardAvoiding(PreferencesScreen);
+const KeyboardAvoidingProfile = withKeyboardAvoiding(ProfileScreen);
 
 const Stack = createNativeStackNavigator();
 
@@ -25,8 +29,8 @@ export function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: tokens.bg } }}>
       <Stack.Screen name="Main" component={MainStack} />
       <Stack.Group screenOptions={{ presentation: "modal" }}>
-        <Stack.Screen name="Preferences" component={PreferencesScreen} />
-        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Preferences" component={KeyboardAvoidingPreferences} />
+        <Stack.Screen name="Profile" component={KeyboardAvoidingProfile} />
       </Stack.Group>
     </Stack.Navigator>
   );

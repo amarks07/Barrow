@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
 import { CATEGORIES } from "@barrow/core";
@@ -45,7 +46,7 @@ export function ExercisePicker({
 
   return (
     <Modal animationType="slide" presentationStyle="fullScreen" visible onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: tokens.bg, paddingTop: insets.top }}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: tokens.bg, paddingTop: insets.top }}>
         <View
           className="flex-row items-center gap-3 px-5 pb-4"
           style={{ borderBottomWidth: 1.5, borderBottomColor: tokens.line }}
@@ -129,7 +130,7 @@ export function ExercisePicker({
             }}
           />
         )}
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

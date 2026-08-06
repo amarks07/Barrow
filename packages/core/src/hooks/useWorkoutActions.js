@@ -1,4 +1,5 @@
 import { clearSingletonGroups, groupContiguous } from "../supersets";
+import { setAngle, addSet, updateSet, removeSet } from "../workoutMutations";
 
 // Mutations for one already-selected workout: renaming it, adding/removing/
 // swapping exercises, editing sets, and pulling a template's exercise list
@@ -96,60 +97,19 @@ export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts
       }),
 
     // Changes the flat/incline/decline angle on an already-added entry.
-    onSetAngle: (exId, angle) =>
-      ensureWorkout((w) => ({
-        ...w,
-        entries: w.entries.map((e) => (e.exerciseId === exId ? { ...e, angle } : e)),
-      })),
+    // Delegates to workoutMutations' pure transforms — the same functions
+    // the widget/notification headless handlers call directly against
+    // AsyncStorage — so there's exactly one implementation of each, not two
+    // that could drift apart.
+    onSetAngle: (exId, angle) => setWorkouts((prev) => setAngle(prev, selectedDate, selectedWorkoutId, exId, angle)),
 
     onAddSet: (exId, preset) =>
-      ensureWorkout((w) => ({
-        ...w,
-        entries: w.entries.map((e) =>
-          e.exerciseId === exId
-            ? {
-                ...e,
-                sets: [
-                  ...e.sets,
-                  {
-                    id: nextId(),
-                    reps: preset?.reps ?? "",
-                    weight: preset?.weight ?? "",
-                    time: preset?.time ?? "",
-                    speed: preset?.speed ?? "",
-                    unit,
-                    warmup: false,
-                  },
-                ],
-              }
-            : e
-        ),
-      })),
+      setWorkouts((prev) => addSet(prev, selectedDate, selectedWorkoutId, exId, nextId, preset, unit)),
 
     onUpdateSet: (exId, setId, field, value) =>
-      ensureWorkout((w) => ({
-        ...w,
-        entries: w.entries.map((e) =>
-          e.exerciseId === exId
-            ? {
-                ...e,
-                sets: e.sets.map((s) =>
-                  s.id === setId
-                    ? field === "weight" || field === "speed"
-                      ? { ...s, [field]: value, unit }
-                      : { ...s, [field]: value }
-                    : s
-                ),
-              }
-            : e
-        ),
-      })),
+      setWorkouts((prev) => updateSet(prev, selectedDate, selectedWorkoutId, exId, setId, field, value, unit)),
 
-    onRemoveSet: (exId, setId) =>
-      ensureWorkout((w) => ({
-        ...w,
-        entries: w.entries.map((e) => (e.exerciseId === exId ? { ...e, sets: e.sets.filter((s) => s.id !== setId) } : e)),
-      })),
+    onRemoveSet: (exId, setId) => setWorkouts((prev) => removeSet(prev, selectedDate, selectedWorkoutId, exId, setId)),
 
     onApplyTemplate: (tplId) => {
       const tpl = templates.find((t) => t.id === tplId);

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Text, TextInput, View } from "react-native";
+import { Modal, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
@@ -21,7 +22,7 @@ export function ResetPasswordModal({ cloudSync }) {
 
   return (
     <Modal transparent animationType="fade" visible>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.3)" }}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.3)" }}>
         <View
           className="p-5"
           style={{ backgroundColor: tokens.bg, borderBottomWidth: 1.5, borderBottomColor: tokens.line, paddingTop: Math.max(20, insets.top) }}

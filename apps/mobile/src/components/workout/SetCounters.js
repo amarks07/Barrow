@@ -8,7 +8,7 @@ import { CardioFields } from "./CardioFields";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
-export function SetCounters({ index, set, unit, isCardio, onUpdate, onRemove }) {
+export function SetCounters({ index, set, unit, isCardio, onUpdate, onRemove, autoFocusField }) {
   const { tokens } = useTheme();
   const [swipeArmed, setSwipeArmed] = useState(false);
   const armedTimeout = useRef(null);
@@ -73,9 +73,9 @@ export function SetCounters({ index, set, unit, isCardio, onUpdate, onRemove }) 
         </View>
         <View style={{ gap: 8 }}>
           {isCardio ? (
-            <CardioFields set={set} unit={unit} onUpdate={onUpdate} />
+            <CardioFields set={set} unit={unit} onUpdate={onUpdate} autoFocusField={autoFocusField} />
           ) : (
-            <StrengthFields set={set} unit={unit} onUpdate={onUpdate} />
+            <StrengthFields set={set} unit={unit} onUpdate={onUpdate} autoFocusField={autoFocusField} />
           )}
         </View>
       </View>

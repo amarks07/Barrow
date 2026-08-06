@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Dimensions, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, X } from "lucide-react-native";
 import { groupContiguous, groupIndexOf, pruneGroups, runInfo } from "@barrow/core";
@@ -57,7 +58,7 @@ export function TemplateBuilder({ exercises, onClose, onSave, onAddCustomExercis
 
   return (
     <Modal transparent animationType="slide" visible onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)" }}
           onPress={onClose}
@@ -238,21 +239,21 @@ export function TemplateBuilder({ exercises, onClose, onSave, onAddCustomExercis
             </Pressable>
           </View>
         </View>
+      </KeyboardAvoidingView>
 
-        {showPicker && (
-          <ExercisePicker
-            exercises={exercises}
-            exerciseView={exerciseView}
-            setExerciseView={setExerciseView}
-            alreadyPicked={picked}
-            onPick={(ex) => setPicked((p) => (p.includes(ex.id) ? p : [...p, ex.id]))}
-            onUnpick={(ex) => removePicked(ex.id)}
-            onClose={() => setShowPicker(false)}
-            onAddCustom={onAddCustomExercise}
-            doneLabel="Done"
-          />
-        )}
-      </View>
+      {showPicker && (
+        <ExercisePicker
+          exercises={exercises}
+          exerciseView={exerciseView}
+          setExerciseView={setExerciseView}
+          alreadyPicked={picked}
+          onPick={(ex) => setPicked((p) => (p.includes(ex.id) ? p : [...p, ex.id]))}
+          onUnpick={(ex) => removePicked(ex.id)}
+          onClose={() => setShowPicker(false)}
+          onAddCustom={onAddCustomExercise}
+          doneLabel="Done"
+        />
+      )}
     </Modal>
   );
 }

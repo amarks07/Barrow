@@ -8,10 +8,14 @@ import { DayScreen } from "../screens/workout/DayScreen";
 import { ExerciseFocusScreen } from "../screens/workout/ExerciseFocusScreen";
 import { HistoryScreen } from "../screens/history/HistoryScreen";
 import { TemplateDetailScreen } from "../screens/templates/TemplateDetailScreen";
+import { withKeyboardAvoiding } from "./withKeyboardAvoiding";
 import { useAppState } from "../state/AppStateProvider";
 import { useTheme } from "../theme/ThemeProvider";
 
 const Stack = createNativeStackNavigator();
+const KeyboardAvoidingDay = withKeyboardAvoiding(DayScreen);
+const KeyboardAvoidingHistory = withKeyboardAvoiding(HistoryScreen);
+const KeyboardAvoidingTemplateDetail = withKeyboardAvoiding(TemplateDetailScreen);
 
 // AppHeader renders once here, above a nested stack, so it stays visible
 // across every screen in that stack — tabs and drill-downs alike — instead
@@ -65,9 +69,14 @@ export function MainStack({ navigation }) {
         {/* Modal presentation: Day slides up and sits on top of Tabs
             natively (react-native-screens handles it off the JS thread)
             instead of the default push/pop card transition. */}
-        <Stack.Screen name="Day" component={DayScreen} options={{ presentation: "modal" }} />
-        <Stack.Screen name="History" component={HistoryScreen} />
-        <Stack.Screen name="TemplateDetail" component={TemplateDetailScreen} />
+        <Stack.Screen name="Day" component={KeyboardAvoidingDay} options={{ presentation: "modal" }} />
+        <Stack.Screen name="History" component={KeyboardAvoidingHistory} />
+        <Stack.Screen name="TemplateDetail" component={KeyboardAvoidingTemplateDetail} />
+        {/* No withKeyboardAvoiding here: ExerciseFocusView's pager pages are
+            each their own KeyboardAwareScrollView, which already scrolls the
+            focused Counter field above the keyboard. Wrapping the whole
+            screen in KeyboardAvoidingView too would double up — both trying
+            to resize/pad for the same keyboard at once. */}
         <Stack.Screen name="ExerciseFocus" component={ExerciseFocusScreen} />
       </Stack.Navigator>
 

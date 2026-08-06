@@ -24,6 +24,7 @@ export function PreferencesView({
   unit, onUnitChange, theme, onThemeChange,
   workoutView, onWorkoutViewChange,
   focusSupersetGrouping, onFocusSupersetGroupingChange,
+  focusNotificationEnabled, onFocusNotificationToggle,
   onClose,
 }) {
   const { tokens } = useTheme();
@@ -118,6 +119,44 @@ export function PreferencesView({
               );
             })}
           </View>
+        </View>
+
+        <View className="mb-7">
+          <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 13, textTransform: "uppercase", color: tokens.textDim }} className="mb-2">
+            Home &amp; lock screen
+          </Text>
+          <Text style={{ fontSize: 11, color: tokens.textDim, lineHeight: 16 }} className="mb-3">
+            Add the Barrow widget to your home screen to see and edit the workout open in Focus flow — navigate exercises,
+            adjust reps/weight, and add or remove sets right from the widget.
+          </Text>
+          <Card selected={focusNotificationEnabled === "on"} style={{ padding: 12 }}>
+            <Pressable
+              onPress={() => onFocusNotificationToggle(focusNotificationEnabled === "on" ? "off" : "on")}
+              className="flex-row items-start gap-3"
+            >
+              <View
+                className="items-center justify-center rounded-full"
+                style={{
+                  width: 18,
+                  height: 18,
+                  marginTop: 1,
+                  backgroundColor: focusNotificationEnabled === "on" ? tokens.accent : "transparent",
+                  borderWidth: 1.5,
+                  borderColor: focusNotificationEnabled === "on" ? tokens.accent : tokens.lineStrong,
+                }}
+              >
+                {focusNotificationEnabled === "on" && <Check size={12} color="#121214" />}
+              </View>
+              <View className="flex-1">
+                <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>Show workout notification</Text>
+                <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2, lineHeight: 16 }}>
+                  An ongoing notification for the workout open in Focus flow, with Prev / Add set / Next actions — Android
+                  allows at most 3 buttons on a notification, everything else opens the app. Whether it's shown on your
+                  lock screen depends on your device's own notification privacy setting.
+                </Text>
+              </View>
+            </Pressable>
+          </Card>
         </View>
       </ScrollView>
     </View>

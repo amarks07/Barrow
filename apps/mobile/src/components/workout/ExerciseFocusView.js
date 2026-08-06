@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PagerView from "react-native-pager-view";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react-native";
-import { convertSpeed, convertWeight, fmtNum, getRecommendation, getRepRange } from "@barrow/core";
+import { buildSteps, convertSpeed, convertWeight, fmtNum, getRecommendation, getRepRange } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
 import { SetCounters } from "./SetCounters";
@@ -11,32 +12,7 @@ import { AngleToggle } from "./AngleToggle";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
-// Groups a workout's entries into "steps" for the focus view — a superset's
-// entries (already stored contiguously) collapse into one step so they show
-// together on a single screen. When groupSupersets is false (the
-// "Separate" preference), every entry gets its own step, superset or not.
-function buildSteps(entries, groupSupersets) {
-  if (!groupSupersets) return entries.map((e) => [e]);
-  const steps = [];
-  let i = 0;
-  while (i < entries.length) {
-    const supersetId = entries[i].supersetId;
-    if (supersetId) {
-      const group = [];
-      while (i < entries.length && entries[i].supersetId === supersetId) {
-        group.push(entries[i]);
-        i += 1;
-      }
-      steps.push(group);
-    } else {
-      steps.push([entries[i]]);
-      i += 1;
-    }
-  }
-  return steps;
-}
-
-function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, showName }) {
+function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, showName, focusSetId, focusField }) {
   const { tokens } = useTheme();
   const isCardio = ex.category === "Cardio";
   const lastSet = entry.sets[entry.sets.length - 1];
@@ -89,6 +65,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAdd
           isCardio={isCardio}
           onUpdate={(field, value) => onUpdateSet(entry.exerciseId, set.id, field, value)}
           onRemove={() => onRemoveSet(entry.exerciseId, set.id)}
+          autoFocusField={set.id === focusSetId ? focusField : undefined}
         />
       ))}
 
@@ -123,6 +100,8 @@ export function ExerciseFocusView({
   dayWorkouts, activeWorkoutId, initialExerciseId, exercises, unit, workouts,
   onBack, onSetAngle, onAddSet, onUpdateSet, onRemoveSet,
   groupSupersets = true,
+  onStepChange,
+  focusSetId, focusField,
 }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -136,6 +115,15 @@ export function ExerciseFocusView({
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const clampedIndex = Math.min(activeIndex, Math.max(0, steps.length - 1));
   const activeStep = steps[clampedIndex];
+
+  // Lets the screen persist "what's currently open in Focus flow" (the
+  // barrow:focusPointer AsyncStorage key the widget/notification read) —
+  // fires on mount and on every step change, not just explicit Prev/Next
+  // taps, since the pager can also be swiped directly.
+  useEffect(() => {
+    if (activeStep) onStepChange?.(activeStep);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workout?.id, clampedIndex, activeStep]);
 
   const goTo = (index) => {
     setActiveIndex(index);
@@ -187,7 +175,12 @@ export function ExerciseFocusView({
 
       <PagerView ref={pagerRef} style={{ flex: 1 }} initialPage={clampedIndex} onPageSelected={(e) => setActiveIndex(e.nativeEvent.position)}>
         {steps.map((step, stepIndex) => (
-          <ScrollView key={stepIndex} style={{ paddingHorizontal: 20 }} contentContainerStyle={{ paddingTop: 12, paddingBottom: 104 + insets.bottom }}>
+          <KeyboardAwareScrollView
+            key={stepIndex}
+            bottomOffset={24}
+            style={{ paddingHorizontal: 20 }}
+            contentContainerStyle={{ paddingTop: 12, paddingBottom: 104 + insets.bottom }}
+          >
             {step.map((entry) => {
               const ex = exMap[entry.exerciseId];
               if (!ex) return null;
@@ -204,10 +197,12 @@ export function ExerciseFocusView({
                   onUpdateSet={onUpdateSet}
                   onRemoveSet={onRemoveSet}
                   showName={step.length > 1}
+                  focusSetId={focusSetId}
+                  focusField={focusField}
                 />
               );
             })}
-          </ScrollView>
+          </KeyboardAwareScrollView>
         ))}
       </PagerView>
 

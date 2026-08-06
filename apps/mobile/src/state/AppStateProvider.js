@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo, useRef } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef } from "react";
+import { AppState } from "react-native";
 import {
   usePersistedState,
   useDayWorkouts,
@@ -7,9 +8,13 @@ import {
   SEED_EXERCISES,
   reconcileExercises,
   migrateWorkouts,
+  generateId,
 } from "@barrow/core";
 import { asyncStorageAdapter } from "./storage";
 import { useCloudSync } from "../hooks/useCloudSync";
+import { refreshFocusWidget } from "../widget/refreshFocusWidget";
+import { refreshFocusNotification, cancelFocusNotification } from "../notification/focusNotification";
+import { clearStaleFocusPointer } from "./staleFocusPointer";
 
 const AppStateContext = createContext(null);
 
@@ -51,9 +56,76 @@ export function AppStateProvider({ children }) {
   );
   const [profile, setProfile] = usePersistedState("barrow:profile", DEFAULT_PROFILE, JSON_CODEC);
   const updateProfile = (field, value) => setProfile((p) => ({ ...p, [field]: value }));
+  const [focusNotificationEnabled, setFocusNotificationEnabled] = usePersistedState(
+    "barrow:focusNotificationEnabled",
+    "off",
+    RAW_CODEC
+  );
 
-  const idRef = useRef(0);
-  const nextId = () => `s${Date.now()}-${idRef.current++}`;
+  const nextId = generateId;
+
+  // usePersistedState only loads barrow:workouts from disk once, on mount
+  // (see its own comment) — it has no way to know a headless widget/
+  // notification task wrote to it while this provider sat backgrounded.
+  // Without this, the very next debounced save from that same
+  // usePersistedState instance would flush stale in-memory `workouts` back
+  // over whatever the headless task just wrote. AsyncStorage is the one
+  // source of truth (Supabase sync is a separate, optional backup), and by
+  // the time the app backgrounds its own last edit is already flushed, so
+  // a full overwrite-from-disk on every foreground is always safe, not
+  // just a merge of what's newer.
+  //
+  // Also the "relaunched after being killed" half of the stale-focusPointer
+  // guard (see clearStaleFocusPointer) — a foreground transition is exactly
+  // when a kill-then-relaunch would surface. Read through a ref rather than
+  // closing over focusNotificationEnabled directly, since this effect (like
+  // the resync above) subscribes once on mount and would otherwise always
+  // see whatever that preference was at that first render.
+  const focusNotificationEnabledRef = useRef(focusNotificationEnabled);
+  useEffect(() => {
+    focusNotificationEnabledRef.current = focusNotificationEnabled;
+  }, [focusNotificationEnabled]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", async (next) => {
+      if (next !== "active") return;
+      try {
+        const raw = await asyncStorageAdapter.getItem("barrow:workouts");
+        if (raw) setWorkouts(migrateWorkouts(JSON.parse(raw)));
+      } catch (e) {
+        console.error("Barrow: failed to resync barrow:workouts on foreground", e);
+      }
+      clearStaleFocusPointer(focusNotificationEnabledRef.current).catch((e) =>
+        console.error("Barrow: failed to clear stale barrow:focusPointer", e)
+      );
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Tells Android to redraw the widget/notification right after an in-app
+  // edit instead of waiting on the OS's own throttled update cycle —
+  // debounced alongside usePersistedState's own save so this fires once
+  // per settled edit, not once per keystroke/tap.
+  const refreshTimeout = useRef(null);
+  useEffect(() => {
+    if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
+    refreshTimeout.current = setTimeout(() => {
+      refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
+      if (focusNotificationEnabled === "on") {
+        refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
+      }
+    }, 400);
+    return () => clearTimeout(refreshTimeout.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workouts, focusNotificationEnabled]);
+
+  // Pulls the notification down as soon as the preference is switched off,
+  // rather than leaving it up to whatever's showing until the next
+  // workouts change would otherwise trigger a refresh.
+  useEffect(() => {
+    if (focusNotificationEnabled !== "on") cancelFocusNotification().catch(() => {});
+  }, [focusNotificationEnabled]);
 
   const dayWorkoutsActions = useDayWorkouts({ setWorkouts, nextId });
   // Deleting the template currently open in TemplateDetailScreen is handled
@@ -96,6 +168,8 @@ export function AppStateProvider({ children }) {
       setWorkoutView,
       focusSupersetGrouping,
       setFocusSupersetGrouping,
+      focusNotificationEnabled,
+      setFocusNotificationEnabled,
       profile,
       updateProfile,
       nextId,
@@ -106,7 +180,7 @@ export function AppStateProvider({ children }) {
       cloudSync,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [exercises, templates, workouts, unit, theme, workoutView, focusSupersetGrouping, profile, cloudSync]
+    [exercises, templates, workouts, unit, theme, workoutView, focusSupersetGrouping, focusNotificationEnabled, profile, cloudSync]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

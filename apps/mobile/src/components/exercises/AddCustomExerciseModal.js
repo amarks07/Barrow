@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CATEGORIES } from "@barrow/core";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -14,7 +15,7 @@ export function AddCustomExerciseModal({ onClose, onSave }) {
 
   return (
     <Modal transparent animationType="slide" visible onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)" }}
           onPress={onClose}
@@ -95,7 +96,7 @@ export function AddCustomExerciseModal({ onClose, onSave }) {
             </Pressable>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
