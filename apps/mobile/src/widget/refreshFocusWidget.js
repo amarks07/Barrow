@@ -1,7 +1,7 @@
 import { requestWidgetUpdate } from "react-native-android-widget";
 import { readFocusSnapshot } from "@barrow/core";
 import { asyncStorageAdapter } from "../state/storage";
-import { readExercises, readUnit } from "../state/focusReaders";
+import { readExercises, readUnit, readTheme, readAccentColor } from "../state/focusReaders";
 import { FocusWidget } from "./FocusWidget";
 
 // Called from the foregrounded app (AppStateProvider, after any workouts
@@ -13,9 +13,9 @@ export async function refreshFocusWidget() {
   await requestWidgetUpdate({
     widgetName: "FocusWidget",
     renderWidget: async () => {
-      const [exercises, unit] = await Promise.all([readExercises(), readUnit()]);
+      const [exercises, unit, theme, accentColor] = await Promise.all([readExercises(), readUnit(), readTheme(), readAccentColor()]);
       const snapshot = await readFocusSnapshot(asyncStorageAdapter, exercises);
-      return <FocusWidget snapshot={snapshot} unit={unit} />;
+      return <FocusWidget snapshot={snapshot} unit={unit} theme={theme} accentColor={accentColor} />;
     },
   });
 }

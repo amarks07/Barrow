@@ -15,9 +15,9 @@ export function ExercisesView({ exercises, exerciseView, setExerciseView, onOpen
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
-  const filtered = exercises.filter(
-    (e) => e.name.toLowerCase().includes(query.toLowerCase()) && (categoryFilter === "all" || e.category === categoryFilter)
-  );
+  const filtered = exercises
+    .filter((e) => e.name.toLowerCase().includes(query.toLowerCase()) && (categoryFilter === "all" || e.category === categoryFilter))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const grouped = CATEGORIES.map((cat) => ({ cat, items: filtered.filter((e) => e.category === cat) })).filter((g) => g.items.length);
 
   return (

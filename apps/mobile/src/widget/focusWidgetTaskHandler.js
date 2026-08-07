@@ -8,7 +8,7 @@ import {
   focusToggleWarmup,
 } from "@barrow/core";
 import { asyncStorageAdapter } from "../state/storage";
-import { readExercises, readUnit } from "../state/focusReaders";
+import { readExercises, readUnit, readTheme, readAccentColor } from "../state/focusReaders";
 import { FocusWidget } from "./FocusWidget";
 
 // This handler runs headless — via Android's HeadlessJsTaskService, with no
@@ -25,14 +25,14 @@ export async function focusWidgetTaskHandler(props) {
   const { widgetAction, clickAction, clickActionData, renderWidget } = props;
 
   if (widgetAction === "WIDGET_ADDED" || widgetAction === "WIDGET_UPDATE" || widgetAction === "WIDGET_RESIZED") {
-    const [exercises, unit] = await Promise.all([readExercises(), readUnit()]);
+    const [exercises, unit, theme, accentColor] = await Promise.all([readExercises(), readUnit(), readTheme(), readAccentColor()]);
     const snapshot = await readFocusSnapshot(asyncStorageAdapter, exercises);
-    renderWidget(<FocusWidget snapshot={snapshot} unit={unit} />);
+    renderWidget(<FocusWidget snapshot={snapshot} unit={unit} theme={theme} accentColor={accentColor} />);
     return;
   }
 
   if (widgetAction === "WIDGET_CLICK") {
-    const [exercises, unit] = await Promise.all([readExercises(), readUnit()]);
+    const [exercises, unit, theme, accentColor] = await Promise.all([readExercises(), readUnit(), readTheme(), readAccentColor()]);
     let snapshot;
     switch (clickAction) {
       case "REPS_PLUS":
@@ -68,6 +68,6 @@ export async function focusWidgetTaskHandler(props) {
       default:
         snapshot = await readFocusSnapshot(asyncStorageAdapter, exercises);
     }
-    renderWidget(<FocusWidget snapshot={snapshot} unit={unit} />);
+    renderWidget(<FocusWidget snapshot={snapshot} unit={unit} theme={theme} accentColor={accentColor} />);
   }
 }

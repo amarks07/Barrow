@@ -1,4 +1,6 @@
 import { FlexWidget, TextWidget, ListWidget } from "react-native-android-widget";
+import { THEME_TOKENS } from "../theme/tokens";
+import { applyAccent } from "../theme/accentPalette";
 
 // Renders the Android home screen widget as native RemoteViews (via
 // react-native-android-widget's JSX-to-RemoteViews compiler) from a
@@ -10,13 +12,14 @@ import { FlexWidget, TextWidget, ListWidget } from "react-native-android-widget"
 // tap targets (clickActionData carries the setId) rather than acting on one
 // implicit "active" set, since a resized widget can show every set on every
 // exercise in the current step, not just one.
-
-const BG = "#121214";
-const SURFACE = "#1b1b1f";
-const LINE = "#2a2a2e";
-const TEXT = "#f4f4f5";
-const TEXT_DIM = "#8b8b90";
-const ACCENT = "#e8542a";
+//
+// Colors come from `theme` (already resolved to "dark"/"light" — see
+// focusReaders.readTheme) rather than being hardcoded, so the widget always
+// matches whatever the app itself is showing. `tokens` is threaded through
+// as a plain prop rather than the app's ThemeProvider context, since this
+// tree is rendered headless (often with no app process at all) and each
+// render call needs its own tokens, not whatever a shared module-level
+// value happened to hold last.
 
 // Small gap at the bottom of the (scrolling) sets list, inside the
 // ListWidget's own children, so the last row doesn't sit flush against the
@@ -40,21 +43,21 @@ function buildFocusDeepLink({ dateKey, workoutId, exerciseId, setId, field }) {
   return `barrow://focus?${query}`;
 }
 
-function NavButton({ label, disabled, clickAction }) {
+function NavButton({ label, disabled, clickAction, tokens }) {
   return (
     <FlexWidget
       clickAction={disabled ? undefined : clickAction}
       style={{
         paddingHorizontal: 10,
         height: 28,
-        backgroundColor: SURFACE,
+        backgroundColor: tokens.surface,
         borderRadius: 14,
         alignItems: "center",
         justifyContent: "center",
         marginLeft: 4,
       }}
     >
-      <TextWidget text={label} style={{ fontSize: 12, color: disabled ? TEXT_DIM : TEXT }} />
+      <TextWidget text={label} style={{ fontSize: 12, color: disabled ? tokens.textDim : tokens.text }} />
     </FlexWidget>
   );
 }
@@ -67,7 +70,7 @@ function NavButton({ label, disabled, clickAction }) {
 // the current step's primary exercise — same convention the notification's
 // 3-button cap already uses (see focusNotification.js) — rather than needing
 // per-exercise buttons for supersets.
-function AddSetButton({ clickActionData }) {
+function AddSetButton({ clickActionData, tokens }) {
   return (
     <FlexWidget
       clickAction="ADD_SET"
@@ -75,26 +78,26 @@ function AddSetButton({ clickActionData }) {
       style={{
         paddingHorizontal: 14,
         height: 40,
-        backgroundColor: ACCENT,
+        backgroundColor: tokens.accent,
         borderRadius: 20,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <TextWidget text="+ Add set" style={{ fontSize: 14, fontWeight: "600", color: TEXT }} />
+      <TextWidget text="+ Add set" style={{ fontSize: 14, fontWeight: "600", color: tokens.onAccent }} />
     </FlexWidget>
   );
 }
 
-function Stepper({ label, value, onMinus, onPlus, minusData, plusData, tapUri }) {
+function Stepper({ label, value, onMinus, onPlus, minusData, plusData, tapUri, tokens }) {
   return (
     <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
       <FlexWidget
         clickAction={onMinus}
         clickActionData={minusData}
-        style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center", backgroundColor: SURFACE, borderRadius: 15 }}
+        style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center", backgroundColor: tokens.surface, borderRadius: 15 }}
       >
-        <TextWidget text="–" style={{ fontSize: 17, color: TEXT }} />
+        <TextWidget text="–" style={{ fontSize: 17, color: tokens.text }} />
       </FlexWidget>
       {/* Tapping the value itself (rather than +/-) opens the app to type
           an exact number — see buildFocusDeepLink above. */}
@@ -102,21 +105,21 @@ function Stepper({ label, value, onMinus, onPlus, minusData, plusData, tapUri })
         text={`${value}${label ? " " + label : ""}`}
         clickAction={tapUri ? "OPEN_URI" : undefined}
         clickActionData={tapUri ? { uri: tapUri } : undefined}
-        style={{ fontSize: 14, color: TEXT, marginHorizontal: 6, width: 62, textAlign: "center" }}
+        style={{ fontSize: 14, color: tokens.text, marginHorizontal: 6, width: 62, textAlign: "center" }}
         truncate="END"
       />
       <FlexWidget
         clickAction={onPlus}
         clickActionData={plusData}
-        style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center", backgroundColor: SURFACE, borderRadius: 15 }}
+        style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center", backgroundColor: tokens.surface, borderRadius: 15 }}
       >
-        <TextWidget text="+" style={{ fontSize: 17, color: TEXT }} />
+        <TextWidget text="+" style={{ fontSize: 17, color: tokens.text }} />
       </FlexWidget>
     </FlexWidget>
   );
 }
 
-function WarmupToggle({ set }) {
+function WarmupToggle({ set, tokens }) {
   return (
     <FlexWidget
       clickAction="TOGGLE_WARMUP"
@@ -127,17 +130,17 @@ function WarmupToggle({ set }) {
         height: 24,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: set.warmup ? ACCENT : SURFACE,
+        backgroundColor: set.warmup ? tokens.accent : tokens.surface,
         borderRadius: 12,
         marginRight: 4,
       }}
     >
-      <TextWidget text="W" style={{ fontSize: 11, fontWeight: "700", color: set.warmup ? TEXT : TEXT_DIM }} />
+      <TextWidget text="W" style={{ fontSize: 11, fontWeight: "700", color: set.warmup ? tokens.onAccent : tokens.textDim }} />
     </FlexWidget>
   );
 }
 
-function SetRow({ set, unit, dateKey, workoutId, exerciseId }) {
+function SetRow({ set, unit, dateKey, workoutId, exerciseId, tokens }) {
   const weightUri = buildFocusDeepLink({ dateKey, workoutId, exerciseId, setId: set.id, field: "weight" });
   const repsUri = buildFocusDeepLink({ dateKey, workoutId, exerciseId, setId: set.id, field: "reps" });
   return (
@@ -149,39 +152,39 @@ function SetRow({ set, unit, dateKey, workoutId, exerciseId }) {
         paddingVertical: 6,
         paddingHorizontal: 4,
         borderBottomWidth: 1,
-        borderBottomColor: LINE,
+        borderBottomColor: tokens.line,
         width: "match_parent",
       }}
     >
-      <WarmupToggle set={set} />
-      <Stepper value={set.weight || "0"} label={set.unit || unit} onMinus="WEIGHT_MINUS" onPlus="WEIGHT_PLUS" minusData={{ setId: set.id }} plusData={{ setId: set.id }} tapUri={weightUri} />
-      <Stepper value={set.reps || "0"} label="reps" onMinus="REPS_MINUS" onPlus="REPS_PLUS" minusData={{ setId: set.id }} plusData={{ setId: set.id }} tapUri={repsUri} />
+      <WarmupToggle set={set} tokens={tokens} />
+      <Stepper value={set.weight || "0"} label={set.unit || unit} onMinus="WEIGHT_MINUS" onPlus="WEIGHT_PLUS" minusData={{ setId: set.id }} plusData={{ setId: set.id }} tapUri={weightUri} tokens={tokens} />
+      <Stepper value={set.reps || "0"} label="reps" onMinus="REPS_MINUS" onPlus="REPS_PLUS" minusData={{ setId: set.id }} plusData={{ setId: set.id }} tapUri={repsUri} tokens={tokens} />
       <FlexWidget
         clickAction="REMOVE_SET"
         clickActionData={{ setId: set.id }}
         style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
       >
-        <TextWidget text="✕" style={{ fontSize: 15, color: TEXT_DIM }} />
+        <TextWidget text="✕" style={{ fontSize: 15, color: tokens.textDim }} />
       </FlexWidget>
     </FlexWidget>
   );
 }
 
-function ExerciseBlock({ entry, unit, showName, dateKey, workoutId }) {
+function ExerciseBlock({ entry, unit, showName, dateKey, workoutId, tokens }) {
   return (
     <FlexWidget style={{ width: "match_parent", paddingVertical: 6 }}>
       {showName && (
-        <TextWidget text={entry.name} style={{ fontSize: 15, fontWeight: "600", color: TEXT, marginBottom: 4 }} truncate="END" maxLines={1} />
+        <TextWidget text={entry.name} style={{ fontSize: 15, fontWeight: "600", color: tokens.text, marginBottom: 4 }} truncate="END" maxLines={1} />
       )}
-      {entry.sets.length === 0 && <TextWidget text="No sets yet" style={{ fontSize: 13, color: TEXT_DIM, marginBottom: 4 }} />}
+      {entry.sets.length === 0 && <TextWidget text="No sets yet" style={{ fontSize: 13, color: tokens.textDim, marginBottom: 4 }} />}
       {entry.sets.map((set) => (
-        <SetRow key={set.id} set={set} unit={unit} dateKey={dateKey} workoutId={workoutId} exerciseId={entry.exerciseId} />
+        <SetRow key={set.id} set={set} unit={unit} dateKey={dateKey} workoutId={workoutId} exerciseId={entry.exerciseId} tokens={tokens} />
       ))}
     </FlexWidget>
   );
 }
 
-function RefreshButton() {
+function RefreshButton({ tokens }) {
   return (
     <FlexWidget
       clickAction="REFRESH_WIDGET"
@@ -189,25 +192,25 @@ function RefreshButton() {
       style={{
         width: 40,
         height: 40,
-        backgroundColor: SURFACE,
+        backgroundColor: tokens.surface,
         borderRadius: 20,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <TextWidget text="⟳" style={{ fontSize: 19, color: TEXT }} />
+      <TextWidget text="⟳" style={{ fontSize: 19, color: tokens.text }} />
     </FlexWidget>
   );
 }
 
-function EmptyState() {
+function EmptyState({ tokens }) {
   return (
     <FlexWidget
       clickAction="OPEN_APP"
-      style={{ width: "match_parent", height: "match_parent", backgroundColor: BG, padding: 16 }}
+      style={{ width: "match_parent", height: "match_parent", backgroundColor: tokens.bg, padding: 16 }}
     >
       <FlexWidget style={{ width: "match_parent", alignItems: "center", paddingBottom: 10 }}>
-        <TextWidget text="Barrow" style={{ fontSize: 18, fontWeight: "600", color: TEXT }} />
+        <TextWidget text="Barrow" style={{ fontSize: 18, fontWeight: "600", color: tokens.text }} />
       </FlexWidget>
 
       {/* height: 0 + flex: 1, same trick as the sets list below — centers
@@ -215,7 +218,7 @@ function EmptyState() {
       <FlexWidget style={{ width: "match_parent", height: 0, flex: 1, alignItems: "center", justifyContent: "center" }}>
         <TextWidget
           text="Open a workout in the app to manage a session in this widget."
-          style={{ fontSize: 14, color: TEXT_DIM, textAlign: "center" }}
+          style={{ fontSize: 14, color: tokens.textDim, textAlign: "center" }}
           maxLines={3}
         />
       </FlexWidget>
@@ -227,19 +230,21 @@ function EmptyState() {
           same as the title/nav buttons layered over the root in the
           workout view below. */}
       <FlexWidget style={{ width: "match_parent", flexDirection: "row", justifyContent: "flex-start", paddingTop: 10 }}>
-        <RefreshButton />
+        <RefreshButton tokens={tokens} />
       </FlexWidget>
     </FlexWidget>
   );
 }
 
-export function FocusWidget({ snapshot, unit }) {
-  if (!snapshot) return <EmptyState />;
+export function FocusWidget({ snapshot, unit, theme, accentColor }) {
+  const tokens = applyAccent(THEME_TOKENS[theme] ?? THEME_TOKENS.dark, accentColor);
+
+  if (!snapshot) return <EmptyState tokens={tokens} />;
 
   const primaryEntry = snapshot.entries[0];
 
   return (
-    <FlexWidget style={{ width: "match_parent", height: "match_parent", backgroundColor: BG, padding: 16 }}>
+    <FlexWidget style={{ width: "match_parent", height: "match_parent", backgroundColor: tokens.bg, padding: 16 }}>
       {/* Left/right columns both start from a 0-width base with equal flex
           weight, so they split the row's leftover space exactly evenly —
           that's what puts the counter at the true horizontal center
@@ -249,7 +254,7 @@ export function FocusWidget({ snapshot, unit }) {
           <TextWidget
             text={snapshot.title}
             clickAction="OPEN_APP"
-            style={{ fontSize: 17, fontWeight: "600", color: TEXT }}
+            style={{ fontSize: 17, fontWeight: "600", color: tokens.text }}
             truncate="END"
             maxLines={1}
           />
@@ -257,12 +262,12 @@ export function FocusWidget({ snapshot, unit }) {
 
         <TextWidget
           text={`${snapshot.stepIndex + 1}/${snapshot.stepCount}`}
-          style={{ fontSize: 13, color: ACCENT }}
+          style={{ fontSize: 13, color: tokens.accent }}
         />
 
         <FlexWidget style={{ width: 0, flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
-          <NavButton label="Previous" disabled={snapshot.stepIndex === 0} clickAction="PREV_STEP" />
-          <NavButton label="Next" disabled={snapshot.stepIndex === snapshot.stepCount - 1} clickAction="NEXT_STEP" />
+          <NavButton label="Previous" disabled={snapshot.stepIndex === 0} clickAction="PREV_STEP" tokens={tokens} />
+          <NavButton label="Next" disabled={snapshot.stepIndex === snapshot.stepCount - 1} clickAction="NEXT_STEP" tokens={tokens} />
         </FlexWidget>
       </FlexWidget>
 
@@ -281,6 +286,7 @@ export function FocusWidget({ snapshot, unit }) {
               showName={snapshot.isSuperset}
               dateKey={snapshot.dateKey}
               workoutId={snapshot.workoutId}
+              tokens={tokens}
             />
           ))}
           <FlexWidget style={{ width: "match_parent", height: LIST_BOTTOM_SPACER }} />
@@ -288,8 +294,8 @@ export function FocusWidget({ snapshot, unit }) {
       </FlexWidget>
 
       <FlexWidget style={{ width: "match_parent", flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 10 }}>
-        <RefreshButton />
-        <AddSetButton clickActionData={{ exerciseId: primaryEntry?.exerciseId || "" }} />
+        <RefreshButton tokens={tokens} />
+        <AddSetButton clickActionData={{ exerciseId: primaryEntry?.exerciseId || "" }} tokens={tokens} />
       </FlexWidget>
     </FlexWidget>
   );

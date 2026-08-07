@@ -1,24 +1,32 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, X } from "lucide-react-native";
-import { exerciseMeta, shortDayLabel } from "@barrow/core";
+import { ArrowLeft } from "lucide-react-native";
+import { groupIndexOf, runInfo, shortDayLabel } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
 import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
 import { EditableTitle } from "../ui/EditableTitle";
 import { Card } from "../ui/Card";
 import { ExercisePicker } from "../exercises/ExercisePicker";
+import { TemplateExerciseRow } from "./TemplateExerciseRow";
+import { useDragReorderList } from "../../hooks/useDragReorderList";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
 export function TemplateDetailView({
-  template, exercises, workouts, onBack, onDelete, onRename, onSelectDate, onAddExercise, onRemoveExercise, onAddCustomExercise,
+  template, exercises, workouts, onBack, onDelete, onRename, onSelectDate,
+  onAddExercise, onRemoveExercise, onAddCustomExercise, onReorderExercise, onCreateSuperset, onUngroupSuperset,
 }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const [showPicker, setShowPicker] = useState(false);
+  const [supersetMode, setSupersetMode] = useState(false);
+  const [supersetSelection, setSupersetSelection] = useState([]);
+  const [removeSupersetMode, setRemoveSupersetMode] = useState(false);
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
+  const supersets = template.supersets || [];
+  const hasAnyGroup = supersets.length > 0;
 
   const usedDates = useMemo(() => {
     return Object.entries(workouts)
@@ -27,6 +35,48 @@ export function TemplateDetailView({
       .sort((a, b) => (a < b ? 1 : -1))
       .slice(0, 5);
   }, [workouts, template]);
+
+  const rowRuns = useMemo(() => {
+    const groupKey = (id) => {
+      const gi = groupIndexOf(supersets, id);
+      return gi === -1 ? null : gi;
+    };
+    return runInfo(template.exerciseIds, groupKey);
+  }, [template.exerciseIds, supersets]);
+
+  const { draggingGroupIds, dragOffsetY, shiftForIndex, refCallback, makeRowGesture } = useDragReorderList({
+    ids: template.exerciseIds,
+    groupOf: (id) => {
+      const gi = groupIndexOf(supersets, id);
+      return gi === -1 ? null : supersets[gi];
+    },
+    onReorder: onReorderExercise,
+  });
+
+  const cancelSuperset = () => {
+    setSupersetMode(false);
+    setSupersetSelection([]);
+  };
+
+  const saveSuperset = () => {
+    if (supersetSelection.length >= 2) onCreateSuperset(supersetSelection);
+    setSupersetMode(false);
+    setSupersetSelection([]);
+  };
+
+  const handleRowTap = (exId) => {
+    if (removeSupersetMode) {
+      const gi = groupIndexOf(supersets, exId);
+      if (gi !== -1) {
+        onUngroupSuperset(gi);
+        setRemoveSupersetMode(false);
+      }
+      return;
+    }
+    if (supersetMode) {
+      setSupersetSelection((cur) => (cur.includes(exId) ? cur.filter((id) => id !== exId) : [...cur, exId]));
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.bg }}>
@@ -51,34 +101,59 @@ export function TemplateDetailView({
           <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 13, textTransform: "uppercase", color: tokens.textDim }}>Exercises</Text>
           <Button label="+ Add exercise" onPress={() => setShowPicker(true)} variant="accentOutline" />
         </View>
+
+        {(template.exerciseIds.length >= 2 || supersetMode || removeSupersetMode) && (
+          <View className="flex-row items-center justify-end gap-2 mb-2">
+            {supersetMode ? (
+              <>
+                <Text style={{ fontSize: 11, color: tokens.textDim, flex: 1 }}>
+                  {supersetSelection.length < 2 ? "Select 2+ exercises to group" : `${supersetSelection.length} selected`}
+                </Text>
+                <Button label="Cancel" onPress={cancelSuperset} />
+                <Button label="Save" onPress={saveSuperset} disabled={supersetSelection.length < 2} variant="solid" />
+              </>
+            ) : removeSupersetMode ? (
+              <>
+                <Text style={{ fontSize: 11, color: tokens.textDim, flex: 1 }}>Tap an exercise in a superset to remove it</Text>
+                <Button label="Cancel" onPress={() => setRemoveSupersetMode(false)} />
+              </>
+            ) : (
+              <>
+                <Button label="Create superset" onPress={() => setSupersetMode(true)} />
+                {hasAnyGroup && <Button label="Remove superset" onPress={() => setRemoveSupersetMode(true)} />}
+              </>
+            )}
+          </View>
+        )}
+
         {template.exerciseIds.length === 0 ? (
           <Text style={{ fontSize: 13, color: tokens.textDim }} className="mb-6">
             No exercises yet — tap "Add exercise" above.
           </Text>
         ) : (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }} className="mb-6">
-            {template.exerciseIds
-              .map((id) => exMap[id])
-              .filter(Boolean)
-              .map((ex) => (
-                <Card key={ex.id} style={{ padding: 12, position: "relative", width: "48.5%" }}>
-                  <Text style={{ fontSize: 13, fontWeight: "500", color: tokens.text, paddingRight: 16 }} numberOfLines={2}>
-                    {ex.name}
-                  </Text>
-                  <Text style={{ fontSize: 10, color: tokens.textDim, marginTop: 4 }} numberOfLines={1}>
-                    {exerciseMeta(ex)}
-                  </Text>
-                  <Pressable
-                    onPress={() => onRemoveExercise(template.id, ex.id)}
-                    accessibilityLabel={`Remove ${ex.name} from template`}
-                    hitSlop={8}
-                    className="absolute"
-                    style={{ top: 4, right: 4, padding: 6 }}
-                  >
-                    <X size={13} color={tokens.textDim} />
-                  </Pressable>
-                </Card>
-              ))}
+          <View className="mb-6">
+            {template.exerciseIds.map((id, index) => {
+              const ex = exMap[id];
+              if (!ex) return null;
+              return (
+                <TemplateExerciseRow
+                  key={id}
+                  ex={ex}
+                  tokens={tokens}
+                  run={rowRuns[index]}
+                  supersetMode={supersetMode}
+                  removeSupersetMode={removeSupersetMode}
+                  isSelected={supersetSelection.includes(id)}
+                  isDragging={draggingGroupIds.has(id)}
+                  dragOffsetY={dragOffsetY}
+                  shiftY={shiftForIndex(index)}
+                  refCallback={refCallback(id)}
+                  gesture={makeRowGesture(id)}
+                  onRowTap={() => handleRowTap(id)}
+                  onRemove={() => onRemoveExercise(template.id, id)}
+                />
+              );
+            })}
           </View>
         )}
 

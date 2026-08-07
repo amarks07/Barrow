@@ -3,33 +3,20 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 import { SWITCH_HEIGHT } from "../../theme/dimensions";
 import { useTheme } from "../../theme/ThemeProvider";
 
-// Every usage of this in the app is a 2-option toggle (unit, theme,
-// exercise-view, superset-grouping), so the whole control is one tap
-// target that flips to the other option — tapping the already-active side,
-// or the padding between the two, used to be a no-op; now anywhere you tap
-// moves to the next option (wrapping around, so with exactly 2 options
-// that's always "the opposite one").
+// Each option is its own tap target that selects that option directly —
+// tapping the already-active one is a no-op.
 export function ColorSwitch({ value, options, onChange }) {
   const { tokens } = useTheme();
-  const activeIndex = Math.max(0, options.findIndex((opt) => opt.value === value));
-
-  const toggle = () => {
-    const next = options[(activeIndex + 1) % options.length];
-    onChange(next.value);
-  };
 
   return (
-    <Pressable
-      onPress={toggle}
-      accessibilityRole="switch"
-      accessibilityState={{ checked: activeIndex === options.length - 1 }}
+    <View
       className="flex-row items-center self-start p-1 rounded-full"
       style={{ backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.lineStrong }}
     >
       {options.map((opt) => {
         const active = value === opt.value;
         return (
-          <View
+          <Pressable
             // Keyed on active state too, not just opt.value: even with a
             // stable style object (borderRadius always present, only
             // backgroundColor varies), the newly-active option still
@@ -40,6 +27,9 @@ export function ColorSwitch({ value, options, onChange }) {
             // the native view from scratch instead of patching it in
             // place, so it's built correctly (rounded) from the start.
             key={`${opt.value}-${active}`}
+            onPress={() => onChange(opt.value)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: active }}
             style={{
               height: SWITCH_HEIGHT,
               paddingHorizontal: 14,
@@ -65,9 +55,9 @@ export function ColorSwitch({ value, options, onChange }) {
             >
               {opt.label}
             </Text>
-          </View>
+          </Pressable>
         );
       })}
-    </Pressable>
+    </View>
   );
 }

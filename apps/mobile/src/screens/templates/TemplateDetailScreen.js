@@ -34,6 +34,9 @@ export function TemplateDetailScreen({ route, navigation }) {
       onAddExercise={templateActions.addExerciseToTemplate}
       onRemoveExercise={templateActions.removeExerciseFromTemplate}
       onAddCustomExercise={exerciseActions.addCustomExercise}
+      onReorderExercise={(draggedExId, targetExId) => templateActions.reorderTemplateExercise(template.id, draggedExId, targetExId)}
+      onCreateSuperset={(exIds) => templateActions.createTemplateSuperset(template.id, exIds)}
+      onUngroupSuperset={(groupIndex) => templateActions.ungroupTemplateSuperset(template.id, groupIndex)}
     />
   );
 }

@@ -11,6 +11,7 @@ import {
   generateId,
 } from "@barrow/core";
 import { asyncStorageAdapter } from "./storage";
+import { DEFAULT_ACCENT } from "../theme/accentPalette";
 import { useCloudSync } from "../hooks/useCloudSync";
 import { refreshFocusWidget } from "../widget/refreshFocusWidget";
 import { refreshFocusNotification, cancelFocusNotification } from "../notification/focusNotification";
@@ -47,7 +48,8 @@ export function AppStateProvider({ children }) {
   const [templates, setTemplates] = usePersistedState("barrow:templates", [], JSON_CODEC);
   const [workouts, setWorkouts] = usePersistedState("barrow:workouts", {}, WORKOUTS_CODEC);
   const [unit, setUnit] = usePersistedState("barrow:unit", "lb", RAW_CODEC);
-  const [theme, setTheme] = usePersistedState("barrow:theme", "dark", RAW_CODEC);
+  const [theme, setTheme] = usePersistedState("barrow:theme", "system", RAW_CODEC);
+  const [accentColor, setAccentColor] = usePersistedState("barrow:accentColor", DEFAULT_ACCENT, RAW_CODEC);
   const [workoutView, setWorkoutView] = usePersistedState("barrow:workoutView", "classic", RAW_CODEC);
   const [focusSupersetGrouping, setFocusSupersetGrouping] = usePersistedState(
     "barrow:focusSupersetGrouping",
@@ -106,7 +108,9 @@ export function AppStateProvider({ children }) {
   // Tells Android to redraw the widget/notification right after an in-app
   // edit instead of waiting on the OS's own throttled update cycle —
   // debounced alongside usePersistedState's own save so this fires once
-  // per settled edit, not once per keystroke/tap.
+  // per settled edit, not once per keystroke/tap. Also fires on theme/accent
+  // changes so a flipped Appearance preference or accent color shows up on
+  // the widget right away instead of waiting for its next natural repaint.
   const refreshTimeout = useRef(null);
   useEffect(() => {
     if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
@@ -118,7 +122,7 @@ export function AppStateProvider({ children }) {
     }, 400);
     return () => clearTimeout(refreshTimeout.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workouts, focusNotificationEnabled]);
+  }, [workouts, focusNotificationEnabled, theme, accentColor]);
 
   // Pulls the notification down as soon as the preference is switched off,
   // rather than leaving it up to whatever's showing until the next
@@ -164,6 +168,8 @@ export function AppStateProvider({ children }) {
       setUnit,
       theme,
       setTheme,
+      accentColor,
+      setAccentColor,
       workoutView,
       setWorkoutView,
       focusSupersetGrouping,
@@ -180,7 +186,7 @@ export function AppStateProvider({ children }) {
       cloudSync,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [exercises, templates, workouts, unit, theme, workoutView, focusSupersetGrouping, focusNotificationEnabled, profile, cloudSync]
+    [exercises, templates, workouts, unit, theme, accentColor, workoutView, focusSupersetGrouping, focusNotificationEnabled, profile, cloudSync]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

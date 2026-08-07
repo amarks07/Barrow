@@ -87,14 +87,14 @@ export function WorkoutSummaryView({ dateKey, dayWorkouts, activeWorkoutId, exer
                 </Text>
 
                 {entry.sets.length === 0 ? (
-                  <Text style={{ fontSize: 12, color: tokens.textDim }}>No sets logged</Text>
+                  <Text style={{ fontSize: 12, color: tokens.textDim }}>{isCardio ? "Not logged" : "No sets logged"}</Text>
                 ) : (
                   <View style={{ gap: 4 }}>
                     {entry.sets.map((set, i) => (
                       <View key={set.id} className="flex-row items-center gap-1.5">
                         <Text style={{ fontSize: 13, color: tokens.text }}>
                           {isCardio
-                            ? `Set ${i + 1} · ${fmtNum(set.time)} min @ ${fmtNum(convertSpeed(set.speed, set.unit, unit))} ${speedLabel}`
+                            ? `${fmtNum(set.time)} min @ ${fmtNum(convertSpeed(set.speed, set.unit, unit))} ${speedLabel}`
                             : `Set ${i + 1} · ${fmtNum(convertWeight(set.weight, set.unit, unit))} ${unit} × ${fmtNum(set.reps)} reps`}
                         </Text>
                         {set.warmup && (

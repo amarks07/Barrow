@@ -27,27 +27,38 @@ export function ExerciseFocusScreen({ route, navigation }) {
   // debounced like usePersistedState's own saves (coalesces rapid pager
   // swipes into one write) — so the Android widget/notification know what
   // to render even with the app backgrounded or killed. Fires on mount and
-  // on every step change; cleared on unmount (back button, hardware back,
-  // navigating elsewhere) so the widget/notification drop back to their
-  // empty state the moment the user actually leaves Focus flow, rather
-  // than continuing to show whatever exercise was last on screen. A widget/
-  // notification tap that re-targets this same screen instance to a
-  // different exercise updates route.params in place instead of
-  // unmounting (see the ExerciseFocusView key comment below), so normal
-  // in-workout navigation never trips this.
+  // on every step change. DayScreen (still mounted underneath, in the same
+  // native-stack) owns clearing the pointer once the user actually leaves
+  // the workout entirely — see its own pointer effect — so unmounting this
+  // screen (back button, hardware back) leaves the pointer in place and the
+  // widget/notification keep managing the workout from wherever Focus flow
+  // last left it. A widget/notification tap that re-targets this same
+  // screen instance to a different exercise updates route.params in place
+  // instead of unmounting (see the ExerciseFocusView key comment below), so
+  // normal in-workout navigation never trips this.
   const pointerTimeout = useRef(null);
+  const pendingPointerRef = useRef(null);
+
+  const savePointer = (pointer) => {
+    asyncStorageAdapter
+      .setItem(FOCUS_POINTER_KEY, JSON.stringify(pointer))
+      .then(() => {
+        refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
+        if (focusNotificationEnabled === "on") {
+          refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
+        }
+      })
+      .catch((e) => console.error("Barrow: failed to save barrow:focusPointer", e));
+  };
+
+  // Flushes a still-pending debounced write on unmount instead of just
+  // dropping it — otherwise swiping to a new step and immediately backing
+  // out within the debounce window would leave the pointer on the
+  // previous step instead of the one actually left on screen.
   useEffect(
     () => () => {
       clearTimeout(pointerTimeout.current);
-      asyncStorageAdapter
-        .removeItem(FOCUS_POINTER_KEY)
-        .then(() => {
-          refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
-          if (focusNotificationEnabled === "on") {
-            refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
-          }
-        })
-        .catch((e) => console.error("Barrow: failed to clear barrow:focusPointer", e));
+      if (pendingPointerRef.current) savePointer(pendingPointerRef.current);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -56,12 +67,12 @@ export function ExerciseFocusScreen({ route, navigation }) {
   const onStepChange = (step) => {
     const primaryExerciseId = step[0]?.exerciseId;
     if (!primaryExerciseId) return;
+    const pointer = { dateKey, workoutId, exerciseId: primaryExerciseId, updatedAt: Date.now() };
+    pendingPointerRef.current = pointer;
     clearTimeout(pointerTimeout.current);
     pointerTimeout.current = setTimeout(() => {
-      const pointer = { dateKey, workoutId, exerciseId: primaryExerciseId, updatedAt: Date.now() };
-      asyncStorageAdapter
-        .setItem(FOCUS_POINTER_KEY, JSON.stringify(pointer))
-        .catch((e) => console.error("Barrow: failed to save barrow:focusPointer", e));
+      pendingPointerRef.current = null;
+      savePointer(pointer);
     }, POINTER_SAVE_DEBOUNCE_MS);
   };
 

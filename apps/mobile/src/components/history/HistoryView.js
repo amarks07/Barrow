@@ -103,40 +103,46 @@ export function HistoryView({ exercise, workouts, unit, onBack }) {
                       {g.name || `Workout ${gi + 1}`}
                     </Text>
                   )}
-                  {g.sets.map((s, i) => (
-                    <View key={s.id} className="flex-row items-center justify-between py-0.5">
-                      <View className="flex-row items-center gap-1.5">
-                        <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 14, textTransform: "uppercase", color: tokens.textDim }}>
-                          Set {i + 1}
+                  {g.sets.map((s, i) =>
+                    isCardio ? (
+                      <View key={s.id} className="py-0.5">
+                        <Text style={{ fontSize: 13, color: tokens.text, fontVariant: ["tabular-nums"] }}>
+                          {`${fmtNum(parseFloat(s.time) || 0)} min @ ${fmtNum(convertSpeed(s.speed, s.unit, unit))} ${speedLabel}`}
                         </Text>
-                        {s.warmup && (
-                          <View
-                            className="rounded-full px-1.5 py-0.5"
-                            style={{ backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.lineStrong }}
-                          >
-                            <Text
-                              style={{
-                                fontFamily: FONT_DISPLAY,
-                                fontSize: 9,
-                                lineHeight: 9,
-                                textTransform: "uppercase",
-                                includeFontPadding: false,
-                                textAlignVertical: "center",
-                                color: tokens.textDim,
-                              }}
-                            >
-                              Warmup
-                            </Text>
-                          </View>
-                        )}
                       </View>
-                      <Text style={{ fontSize: 13, color: tokens.text, fontVariant: ["tabular-nums"] }}>
-                        {isCardio
-                          ? `${fmtNum(parseFloat(s.time) || 0)} min @ ${fmtNum(convertSpeed(s.speed, s.unit, unit))} ${speedLabel}`
-                          : `${fmtNum(parseFloat(s.reps) || 0)} reps × ${fmtNum(convertWeight(s.weight, s.unit, unit))} ${unit}`}
-                      </Text>
-                    </View>
-                  ))}
+                    ) : (
+                      <View key={s.id} className="flex-row items-center justify-between py-0.5">
+                        <View className="flex-row items-center gap-1.5">
+                          <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 14, textTransform: "uppercase", color: tokens.textDim }}>
+                            Set {i + 1}
+                          </Text>
+                          {s.warmup && (
+                            <View
+                              className="rounded-full px-1.5 py-0.5"
+                              style={{ backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.lineStrong }}
+                            >
+                              <Text
+                                style={{
+                                  fontFamily: FONT_DISPLAY,
+                                  fontSize: 9,
+                                  lineHeight: 9,
+                                  textTransform: "uppercase",
+                                  includeFontPadding: false,
+                                  textAlignVertical: "center",
+                                  color: tokens.textDim,
+                                }}
+                              >
+                                Warmup
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={{ fontSize: 13, color: tokens.text, fontVariant: ["tabular-nums"] }}>
+                          {`${fmtNum(parseFloat(s.reps) || 0)} reps × ${fmtNum(convertWeight(s.weight, s.unit, unit))} ${unit}`}
+                        </Text>
+                      </View>
+                    )
+                  )}
                 </View>
               ))}
             </View>

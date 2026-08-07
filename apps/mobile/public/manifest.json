@@ -1,0 +1,17 @@
+{
+  "short_name": "Barrow",
+  "name": "Barrow",
+  "icons": [
+    {
+      "src": "/app/icon-512.png",
+      "type": "image/png",
+      "sizes": "1024x1024"
+    }
+  ],
+  "start_url": "/app",
+  "scope": "/app",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#121214",
+  "background_color": "#121214"
+}

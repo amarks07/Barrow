@@ -6,7 +6,6 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 
 import * as Haptics from "expo-haptics";
 import { ArrowLeft, Check, ChevronRight, GripVertical, X } from "lucide-react-native";
 import {
-  convertSpeed,
   convertWeight,
   dayLabel,
   exerciseMeta,
@@ -23,7 +22,9 @@ import { EditableTitle } from "../ui/EditableTitle";
 import { Card } from "../ui/Card";
 import { ExercisePicker } from "../exercises/ExercisePicker";
 import { SetCounters } from "./SetCounters";
+import { CardioCounters } from "./CardioCounters";
 import { SaveAsTemplateModal } from "./SaveAsTemplateModal";
+import { UpdateTemplateModal } from "./UpdateTemplateModal";
 import { AngleToggle } from "./AngleToggle";
 import { WorkoutTabs } from "./WorkoutTabs";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -38,7 +39,7 @@ const DROP_AT_END = "__drop-at-end__";
 // per-instance hook, and hooks can't be called a variable number of times
 // inside a .map() in the parent.
 function WorkoutEntryRow({
-  entry, ex, isCardio, isOpen, rec, prefill, speedLabel, unit, workoutView, supersetMode, isSelected,
+  entry, ex, isCardio, isOpen, rec, prefill, unit, workoutView, supersetMode, isSelected,
   isDragging, dragOffsetY, shiftY, run, tokens,
   refCallback, gesture, onRowTap, onOpenHistory, onSwap, onRemoveExercise, onSetAngle, onAddSet, onUpdateSet, onRemoveSet,
 }) {
@@ -105,7 +106,7 @@ function WorkoutEntryRow({
                       {ex.name}
                     </Text>
                     {ex.angles && <Text style={{ fontSize: 11, color: tokens.accent }}>· {entry.angle || ex.angles[0]}</Text>}
-                    {!isOpen && entry.sets.length > 0 && (
+                    {!isOpen && !isCardio && entry.sets.length > 0 && (
                       <Text style={{ fontSize: 11, color: tokens.textDim }}>
                         · {entry.sets.length} set{entry.sets.length > 1 ? "s" : ""}
                       </Text>
@@ -210,47 +211,50 @@ function WorkoutEntryRow({
             </View>
           )}
 
-          {entry.sets.length === 0 && rec && (
-            <Text style={{ fontSize: 11, color: tokens.textDim }} className="mb-3">
-              Last: {fmtNum(rec.lastWeight)} {unit} × {fmtNum(rec.lastReps)} · {rec.note}
-            </Text>
+          {isCardio ? (
+            <CardioCounters entry={entry} unit={unit} onAddSet={onAddSet} onUpdateSet={onUpdateSet} />
+          ) : (
+            <>
+              {entry.sets.length === 0 && rec && (
+                <Text style={{ fontSize: 11, color: tokens.textDim }} className="mb-3">
+                  Last: {fmtNum(rec.lastWeight)} {unit} × {fmtNum(rec.lastReps)} · {rec.note}
+                </Text>
+              )}
+
+              {entry.sets.map((set) => (
+                <SetCounters
+                  key={set.id}
+                  sets={entry.sets}
+                  set={set}
+                  unit={unit}
+                  onUpdate={(field, value) => onUpdateSet(entry.exerciseId, set.id, field, value)}
+                  onRemove={() => onRemoveSet(entry.exerciseId, set.id)}
+                />
+              ))}
+
+              <Pressable
+                onPress={() => onAddSet(entry.exerciseId, prefill || undefined)}
+                className="w-full mt-2 py-2.5 rounded-full items-center"
+                style={{ backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.lineStrong }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FONT_DISPLAY,
+                    fontSize: 13,
+                    lineHeight: 13,
+                    textTransform: "uppercase",
+                    includeFontPadding: false,
+                    textAlignVertical: "center",
+                    color: tokens.textDim,
+                  }}
+                >
+                  {entry.sets.length === 0 && prefill
+                    ? `+ Add set · ${fmtNum(prefill.reps)} × ${fmtNum(prefill.weight)} ${unit}`
+                    : "+ Add set"}
+                </Text>
+              </Pressable>
+            </>
           )}
-
-          {entry.sets.map((set) => (
-            <SetCounters
-              key={set.id}
-              sets={entry.sets}
-              set={set}
-              unit={unit}
-              isCardio={isCardio}
-              onUpdate={(field, value) => onUpdateSet(entry.exerciseId, set.id, field, value)}
-              onRemove={() => onRemoveSet(entry.exerciseId, set.id)}
-            />
-          ))}
-
-          <Pressable
-            onPress={() => onAddSet(entry.exerciseId, prefill || undefined)}
-            className="w-full mt-2 py-2.5 rounded-full items-center"
-            style={{ backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.lineStrong }}
-          >
-            <Text
-              style={{
-                fontFamily: FONT_DISPLAY,
-                fontSize: 13,
-                lineHeight: 13,
-                textTransform: "uppercase",
-                includeFontPadding: false,
-                textAlignVertical: "center",
-                color: tokens.textDim,
-              }}
-            >
-              {entry.sets.length === 0 && prefill
-                ? isCardio
-                  ? `+ Add set · ${fmtNum(prefill.time)} min @ ${fmtNum(prefill.speed)} ${speedLabel}`
-                  : `+ Add set · ${fmtNum(prefill.reps)} × ${fmtNum(prefill.weight)} ${unit}`
-                : "+ Add set"}
-            </Text>
-          </Pressable>
         </View>
       )}
     </Animated.View>
@@ -261,7 +265,7 @@ export function DayView({
   dateKey, dayWorkouts, activeWorkoutId, exercises, templates, unit, workouts,
   onBack, onSelectWorkout, onCreateWorkout, onDeleteWorkout,
   onRename, onAddExercise, onRemoveExercise, onSwapExercise,
-  onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory, onSaveAsTemplate, onSetAngle,
+  onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory, onSaveAsTemplate, onUpdateTemplate, onSetAngle,
   onAddCustomExercise, onReorderExercise, onCreateSuperset, onUngroupSuperset, workoutView, onOpenExerciseFocus,
 }) {
   const { tokens } = useTheme();
@@ -269,6 +273,7 @@ export function DayView({
   const [showPicker, setShowPicker] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [showUpdateTemplate, setShowUpdateTemplate] = useState(false);
   const [swapExId, setSwapExId] = useState(null);
   const [openExerciseId, setOpenExerciseId] = useState(null);
   const [dragId, setDragId] = useState(null);
@@ -287,7 +292,12 @@ export function DayView({
 
   const workout = dayWorkouts.find((w) => w.id === activeWorkoutId) || dayWorkouts[0];
   const entries = workout ? workout.entries : [];
-  const usedTemplate = (workout?.templateIds || []).length > 0;
+  const linkedTemplateIds = workout?.templateIds || [];
+  const usedTemplate = linkedTemplateIds.length > 0;
+  const linkedTemplates = useMemo(
+    () => templates.filter((t) => linkedTemplateIds.includes(t.id)),
+    [templates, linkedTemplateIds]
+  );
   const hasAnyGroup = entries.some((e) => e.supersetId);
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
   // Group membership only counts entries that actually render — an entry
@@ -496,6 +506,9 @@ export function DayView({
           <Text style={{ fontSize: 11, color: tokens.textDim }}>{dayLabel(dateKey)}</Text>
         </View>
         {entries.length > 0 && !usedTemplate && <Button label="Save as template" onPress={() => setShowSaveTemplate(true)} />}
+        {entries.length > 0 && usedTemplate && linkedTemplates.length > 0 && (
+          <Button label="Update template" onPress={() => setShowUpdateTemplate(true)} />
+        )}
         {dayWorkouts.length > 1 && workout && (
           <ConfirmDeleteIconButton onConfirm={() => onDeleteWorkout(workout.id)} label="Delete this workout" size={18} standardSize />
         )}
@@ -558,12 +571,7 @@ export function DayView({
           const lastSet = entry.sets[entry.sets.length - 1];
           const { repLow, repHigh } = getRepRange(entry.exerciseId, workouts, workout.id);
           const rec = !isCardio && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workout.id, repLow, repHigh) : null;
-          const speedLabel = unit === "kg" ? "km/h" : "mph";
-          const prefill = isCardio
-            ? lastSet
-              ? { time: lastSet.time, speed: convertSpeed(lastSet.speed, lastSet.unit, unit) }
-              : null
-            : lastSet
+          const prefill = lastSet
             ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
             : rec
             ? { reps: rec.recReps, weight: rec.recWeight }
@@ -591,7 +599,6 @@ export function DayView({
               isOpen={isOpen}
               rec={rec}
               prefill={prefill}
-              speedLabel={speedLabel}
               unit={unit}
               workoutView={workoutView}
               supersetMode={supersetMode}
@@ -689,6 +696,17 @@ export function DayView({
           onSave={(name) => {
             onSaveAsTemplate(dateKey, workout.id, name);
             setShowSaveTemplate(false);
+          }}
+        />
+      )}
+
+      {showUpdateTemplate && (
+        <UpdateTemplateModal
+          templates={linkedTemplates}
+          onClose={() => setShowUpdateTemplate(false)}
+          onConfirm={(templateId) => {
+            onUpdateTemplate(dateKey, workout.id, templateId);
+            setShowUpdateTemplate(false);
           }}
         />
       )}

@@ -4,6 +4,7 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
+import { Button } from "../ui/Button";
 
 export function SaveAsTemplateModal({ onClose, onSave }) {
   const { tokens } = useTheme();
@@ -48,36 +49,14 @@ export function SaveAsTemplateModal({ onClose, onSave }) {
             style={{ fontSize: 16, color: tokens.text, borderBottomWidth: 1, borderBottomColor: tokens.lineStrong }}
           />
           <View className="flex-row items-center justify-between">
-            <Pressable onPress={onClose}>
-              <Text
-                style={{
-                  fontFamily: FONT_DISPLAY,
-                  fontSize: 13,
-                  lineHeight: 13,
-                  textTransform: "uppercase",
-                  includeFontPadding: false,
-                  textAlignVertical: "center",
-                  color: tokens.textDim,
-                }}
-              >
-                Cancel
-              </Text>
-            </Pressable>
-            <Pressable onPress={() => name.trim() && onSave(name.trim())}>
-              <Text
-                style={{
-                  fontFamily: FONT_DISPLAY,
-                  fontSize: 13,
-                  lineHeight: 13,
-                  textTransform: "uppercase",
-                  includeFontPadding: false,
-                  textAlignVertical: "center",
-                  color: tokens.text,
-                }}
-              >
-                Save
-              </Text>
-            </Pressable>
+            <Button label="Cancel" size="medium" onPress={onClose} />
+            <Button
+              label="Save"
+              size="medium"
+              variant="solid"
+              disabled={!name.trim()}
+              onPress={() => onSave(name.trim())}
+            />
           </View>
         </Animated.View>
       </KeyboardAvoidingView>

@@ -4,11 +4,10 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { Button } from "../ui/Button";
 import { ConfirmDeleteButton } from "../ui/ConfirmDeleteButton";
 import { StrengthFields } from "./StrengthFields";
-import { CardioFields } from "./CardioFields";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
-export function SetCounters({ sets, set, unit, isCardio, onUpdate, onRemove, autoFocusField }) {
+export function SetCounters({ sets, set, unit, onUpdate, onRemove, autoFocusField }) {
   const { tokens } = useTheme();
   const [swipeArmed, setSwipeArmed] = useState(false);
   const armedTimeout = useRef(null);
@@ -82,11 +81,7 @@ export function SetCounters({ sets, set, unit, isCardio, onUpdate, onRemove, aut
           </View>
         </View>
         <View style={{ gap: 8 }}>
-          {isCardio ? (
-            <CardioFields set={set} unit={unit} onUpdate={onUpdate} autoFocusField={autoFocusField} />
-          ) : (
-            <StrengthFields set={set} unit={unit} onUpdate={onUpdate} autoFocusField={autoFocusField} />
-          )}
+          <StrengthFields set={set} unit={unit} onUpdate={onUpdate} autoFocusField={autoFocusField} />
         </View>
       </View>
     </GestureDetector>

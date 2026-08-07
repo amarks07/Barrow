@@ -14,7 +14,7 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
-import { ThemeProvider } from "./src/theme/ThemeProvider";
+import { ThemeProvider, useTheme } from "./src/theme/ThemeProvider";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { navigationRef } from "./src/navigation/navigationRef";
 import { AppStateProvider, useAppState } from "./src/state/AppStateProvider";
@@ -25,6 +25,14 @@ import { clearStaleFocusPointer } from "./src/state/staleFocusPointer";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// Reads the OS-resolved theme from ThemeProvider's context, since the raw
+// AppStateProvider preference can be "system" — StatusBar needs an actual
+// light/dark answer.
+function AppStatusBar() {
+  const { theme } = useTheme();
+  return <StatusBar style={theme === "dark" ? "light" : "dark"} />;
+}
+
 // Reads the persisted theme preference from AppStateProvider once it's
 // mounted (ThemeProvider itself is theme-agnostic — it just applies
 // whatever token set it's handed). ResetPasswordModal renders here, outside
@@ -32,11 +40,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 // whenever a password-recovery deep link lands — same always-on-top
 // behavior as the web app's z-50 overlay.
 function ThemedApp() {
-  const { theme, cloudSync, focusNotificationEnabled } = useAppState();
+  const { theme, accentColor, cloudSync, focusNotificationEnabled } = useAppState();
   useFocusNotificationNavigation();
   useFocusWidgetDeepLink();
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={theme} accent={accentColor}>
       <NavigationContainer
         ref={navigationRef}
         // The cold-start half of the stale-focusPointer guard (see
@@ -53,7 +61,7 @@ function ThemedApp() {
         <RootNavigator />
       </NavigationContainer>
       {cloudSync.recoveryMode && <ResetPasswordModal cloudSync={cloudSync} />}
-      <StatusBar style={theme === "dark" ? "light" : "dark"} />
+      <AppStatusBar />
     </ThemeProvider>
   );
 }

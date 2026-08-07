@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import PagerView from "react-native-pager-view";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { buildSteps, convertWeight, fmtNum, getRecommendation, getRepRange } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
@@ -13,6 +12,11 @@ import { AngleToggle } from "./AngleToggle";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
+// Web has no react-native-pager-view (it imports native-only RN internals
+// that don't bundle for web — see PagerViewNativeComponent.ts), so this
+// mirrors ExerciseFocusView.js but renders only the active step instead of
+// a swipeable pager. Prev/Next already covered step navigation on native;
+// here they're the only way to move between steps.
 function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, showName, focusSetId, focusField }) {
   const { tokens } = useTheme();
   const isCardio = ex.category === "Cardio";
@@ -111,7 +115,6 @@ export function ExerciseFocusView({
 }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const pagerRef = useRef(null);
   const workout = dayWorkouts.find((w) => w.id === activeWorkoutId) || dayWorkouts[0];
   const entries = workout ? workout.entries : [];
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
@@ -122,19 +125,12 @@ export function ExerciseFocusView({
   const clampedIndex = Math.min(activeIndex, Math.max(0, steps.length - 1));
   const activeStep = steps[clampedIndex];
 
-  // Lets the screen persist "what's currently open in Focus flow" (the
-  // barrow:focusPointer AsyncStorage key the widget/notification read) —
-  // fires on mount and on every step change, not just explicit Prev/Next
-  // taps, since the pager can also be swiped directly.
   useEffect(() => {
     if (activeStep) onStepChange?.(activeStep);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workout?.id, clampedIndex, activeStep]);
 
-  const goTo = (index) => {
-    setActiveIndex(index);
-    pagerRef.current?.setPage(index);
-  };
+  const goTo = (index) => setActiveIndex(index);
 
   if (!workout || steps.length === 0) {
     return (
@@ -179,38 +175,34 @@ export function ExerciseFocusView({
         </View>
       </View>
 
-      <PagerView ref={pagerRef} style={{ flex: 1 }} initialPage={clampedIndex} onPageSelected={(e) => setActiveIndex(e.nativeEvent.position)}>
-        {steps.map((step, stepIndex) => (
-          <KeyboardAwareScrollView
-            key={stepIndex}
-            bottomOffset={24}
-            style={{ paddingHorizontal: 20 }}
-            contentContainerStyle={{ paddingTop: 12, paddingBottom: 104 + insets.bottom }}
-          >
-            {step.map((entry) => {
-              const ex = exMap[entry.exerciseId];
-              if (!ex) return null;
-              return (
-                <ExercisePanel
-                  key={entry.exerciseId}
-                  entry={entry}
-                  ex={ex}
-                  unit={unit}
-                  workouts={workouts}
-                  workoutId={workout.id}
-                  onSetAngle={onSetAngle}
-                  onAddSet={onAddSet}
-                  onUpdateSet={onUpdateSet}
-                  onRemoveSet={onRemoveSet}
-                  showName={step.length > 1}
-                  focusSetId={focusSetId}
-                  focusField={focusField}
-                />
-              );
-            })}
-          </KeyboardAwareScrollView>
-        ))}
-      </PagerView>
+      <KeyboardAwareScrollView
+        key={clampedIndex}
+        bottomOffset={24}
+        style={{ paddingHorizontal: 20 }}
+        contentContainerStyle={{ paddingTop: 12, paddingBottom: 104 + insets.bottom }}
+      >
+        {activeStep.map((entry) => {
+          const ex = exMap[entry.exerciseId];
+          if (!ex) return null;
+          return (
+            <ExercisePanel
+              key={entry.exerciseId}
+              entry={entry}
+              ex={ex}
+              unit={unit}
+              workouts={workouts}
+              workoutId={workout.id}
+              onSetAngle={onSetAngle}
+              onAddSet={onAddSet}
+              onUpdateSet={onUpdateSet}
+              onRemoveSet={onRemoveSet}
+              showName={activeStep.length > 1}
+              focusSetId={focusSetId}
+              focusField={focusField}
+            />
+          );
+        })}
+      </KeyboardAwareScrollView>
 
       <View
         className="flex-row items-center justify-between px-5 pt-4"

@@ -11,7 +11,7 @@ export function Card({ style, children, selected, ...props }) {
       className="rounded-[10px]"
       style={[
         { backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: selected ? undefined : "rgba(0,0,0,0.3)" },
-        selected && { borderColor: "#FF5A36" },
+        selected && { borderColor: tokens.accent },
         style,
       ]}
       {...props}

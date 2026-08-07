@@ -51,7 +51,8 @@ export default function Page() {
 
         <p className="mt-10 text-[11px]" style={{ color: "var(--text-dim)" }}>
           Barrow is distributed directly by its developer, not through the Play Store — that's why
-          Android shows an unfamiliar-source warning during install.
+          Android shows an unfamiliar-source warning during install. On iPhone, visiting this site
+          opens the installable web app version directly.
         </p>
       </div>
     </main>
