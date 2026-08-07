@@ -7,13 +7,14 @@ import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { buildSteps, convertWeight, fmtNum, getRecommendation, getRepRange } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
+import { NoteField } from "../ui/NoteField";
 import { SetCounters } from "./SetCounters";
 import { CardioCounters } from "./CardioCounters";
 import { AngleToggle } from "./AngleToggle";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
-function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, showName, focusSetId, focusField }) {
+function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, showName, focusSetId, focusField }) {
   const { tokens } = useTheme();
   const isCardio = ex.category === "Cardio";
   const lastSet = entry.sets[entry.sets.length - 1];
@@ -29,11 +30,23 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAdd
   return (
     <View className="py-4" style={{ borderBottomWidth: 1.5, borderBottomColor: tokens.line }}>
       {showName && (
-        <View className="flex-row items-center gap-1.5 mb-3">
-          <Text style={{ fontSize: 15, fontWeight: "600", color: tokens.text }} numberOfLines={1}>
-            {ex.name}
-          </Text>
-          {ex.angles && <Text style={{ fontSize: 11, color: tokens.accent }}>· {entry.angle || ex.angles[0]}</Text>}
+        <View className="flex-row items-center justify-between gap-1.5 mb-3">
+          <View className="flex-row items-center gap-1.5 flex-1">
+            <Text style={{ fontSize: 15, fontWeight: "600", color: tokens.text }} numberOfLines={1}>
+              {ex.name}
+            </Text>
+            {ex.angles && <Text style={{ fontSize: 11, color: tokens.accent }}>· {entry.angle || ex.angles[0]}</Text>}
+          </View>
+          {/* Only shown here for a superset's multiple panels — a single
+              exercise has just one note, so its button lives in the header
+              instead (see ExerciseFocusView), next to the back button and
+              title that already identify it. */}
+          <NoteField
+            value={entry.note}
+            onChange={(note) => onSetEntryNote(entry.exerciseId, note)}
+            placeholder="Add exercise note"
+            title={`${ex.name} note`}
+          />
         </View>
       )}
 
@@ -104,7 +117,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAdd
 
 export function ExerciseFocusView({
   dayWorkouts, activeWorkoutId, initialExerciseId, exercises, unit, workouts,
-  onBack, onSetAngle, onAddSet, onUpdateSet, onRemoveSet,
+  onBack, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote,
   groupSupersets = true,
   onStepChange,
   focusSetId, focusField,
@@ -158,6 +171,11 @@ export function ExerciseFocusView({
   }
 
   const title = activeStep.map((e) => exMap[e.exerciseId]?.name).filter(Boolean).join(" + ");
+  // A superset step holds one note per exercise — each gets its own button
+  // in its own panel (see ExercisePanel) instead of one ambiguous button up
+  // here. Only a single-exercise step has one unambiguous note to show.
+  const primaryEntry = activeStep.length === 1 ? activeStep[0] : null;
+  const primaryEx = primaryEntry ? exMap[primaryEntry.exerciseId] : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.bg }}>
@@ -177,6 +195,14 @@ export function ExerciseFocusView({
             {activeStep.length > 1 ? " · Superset" : ""}
           </Text>
         </View>
+        {primaryEntry && primaryEx && (
+          <NoteField
+            value={primaryEntry.note}
+            onChange={(note) => onSetEntryNote(primaryEntry.exerciseId, note)}
+            placeholder="Add exercise note"
+            title={`${primaryEx.name} note`}
+          />
+        )}
       </View>
 
       <PagerView ref={pagerRef} style={{ flex: 1 }} initialPage={clampedIndex} onPageSelected={(e) => setActiveIndex(e.nativeEvent.position)}>
@@ -202,6 +228,7 @@ export function ExerciseFocusView({
                   onAddSet={onAddSet}
                   onUpdateSet={onUpdateSet}
                   onRemoveSet={onRemoveSet}
+                  onSetEntryNote={onSetEntryNote}
                   showName={step.length > 1}
                   focusSetId={focusSetId}
                   focusField={focusField}

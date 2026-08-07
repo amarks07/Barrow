@@ -1,5 +1,5 @@
 import { clearSingletonGroups, groupContiguous } from "../supersets";
-import { setAngle, addSet, updateSet, removeSet } from "../workoutMutations";
+import { setAngle, addSet, updateSet, removeSet, setEntryNote } from "../workoutMutations";
 
 // Mutations for one already-selected workout: renaming it, adding/removing/
 // swapping exercises, editing sets, and pulling a template's exercise list
@@ -25,6 +25,8 @@ export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts
 
   return {
     onRename: (name) => ensureWorkout((w) => ({ ...w, name })),
+
+    onSetNote: (note) => ensureWorkout((w) => ({ ...w, note })),
 
     onAddExercise: (exId) =>
       ensureWorkout((w) =>
@@ -110,6 +112,9 @@ export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts
       setWorkouts((prev) => updateSet(prev, selectedDate, selectedWorkoutId, exId, setId, field, value, unit)),
 
     onRemoveSet: (exId, setId) => setWorkouts((prev) => removeSet(prev, selectedDate, selectedWorkoutId, exId, setId)),
+
+    onSetEntryNote: (exId, note) =>
+      setWorkouts((prev) => setEntryNote(prev, selectedDate, selectedWorkoutId, exId, note)),
 
     onApplyTemplate: (tplId) => {
       const tpl = templates.find((t) => t.id === tplId);

@@ -89,3 +89,10 @@ export function removeSet(workouts, dateKey, workoutId, exerciseId, setId) {
     entries: w.entries.map((e) => (e.exerciseId === exerciseId ? { ...e, sets: e.sets.filter((s) => s.id !== setId) } : e)),
   }));
 }
+
+export function setEntryNote(workouts, dateKey, workoutId, exerciseId, note) {
+  return updateWorkout(workouts, dateKey, workoutId, (w) => ({
+    ...w,
+    entries: w.entries.map((e) => (e.exerciseId === exerciseId ? { ...e, note } : e)),
+  }));
+}

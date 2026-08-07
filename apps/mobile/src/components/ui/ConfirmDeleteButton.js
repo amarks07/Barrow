@@ -5,10 +5,11 @@ import { BUTTON_FONT_SIZE, BUTTON_HEIGHT, BUTTON_PADDING_H } from "../../theme/d
 import { FONT_DISPLAY } from "../../theme/fonts";
 
 // Two-step delete: first tap arms it (red, "Delete?"), second tap actually
-// deletes. Auto-disarms after 3s if you don't confirm. Sized to match
-// Button's "small" — this sits alongside History/Swap/etc. in the same row
-// and needs to read as the same size, not its own component.
-export function ConfirmDeleteButton({ onConfirm, label = "Delete", confirmLabel = "Delete?" }) {
+// deletes. Auto-disarms after 3s if you don't confirm. `size` mirrors
+// Button's — defaults to "small" to match History/Swap/etc. in a row, but
+// callers stacking this alongside Button's "medium" (e.g.
+// ExerciseActionsMenu) can match that height instead.
+export function ConfirmDeleteButton({ onConfirm, label = "Delete", confirmLabel = "Delete?", size = "small" }) {
   const { tokens } = useTheme();
   const [confirming, setConfirming] = useState(false);
 
@@ -33,8 +34,8 @@ export function ConfirmDeleteButton({ onConfirm, label = "Delete", confirmLabel 
         }
       }}
       style={{
-        height: BUTTON_HEIGHT.small,
-        paddingHorizontal: BUTTON_PADDING_H.small,
+        height: BUTTON_HEIGHT[size],
+        paddingHorizontal: BUTTON_PADDING_H[size],
         alignItems: "center",
         justifyContent: "center",
         borderRadius: 999,
@@ -46,8 +47,8 @@ export function ConfirmDeleteButton({ onConfirm, label = "Delete", confirmLabel 
       <Text
         style={{
           fontFamily: FONT_DISPLAY,
-          fontSize: BUTTON_FONT_SIZE.small,
-          lineHeight: BUTTON_FONT_SIZE.small,
+          fontSize: BUTTON_FONT_SIZE[size],
+          lineHeight: BUTTON_FONT_SIZE[size],
           textTransform: "uppercase",
           includeFontPadding: false,
           textAlignVertical: "center",

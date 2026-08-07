@@ -105,6 +105,7 @@ export function ExerciseFocusScreen({ route, navigation }) {
       onAddSet={workoutActions.onAddSet}
       onUpdateSet={workoutActions.onUpdateSet}
       onRemoveSet={workoutActions.onRemoveSet}
+      onSetEntryNote={workoutActions.onSetEntryNote}
       onStepChange={onStepChange}
       groupSupersets={focusSupersetGrouping !== "separate"}
       focusSetId={focusSetId}

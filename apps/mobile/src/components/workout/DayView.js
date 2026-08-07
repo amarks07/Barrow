@@ -16,15 +16,16 @@ import {
 } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
-import { ConfirmDeleteButton } from "../ui/ConfirmDeleteButton";
 import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
 import { EditableTitle } from "../ui/EditableTitle";
+import { NoteButton, NoteModal } from "../ui/NoteField";
 import { Card } from "../ui/Card";
 import { ExercisePicker } from "../exercises/ExercisePicker";
 import { SetCounters } from "./SetCounters";
 import { CardioCounters } from "./CardioCounters";
 import { SaveAsTemplateModal } from "./SaveAsTemplateModal";
 import { UpdateTemplateModal } from "./UpdateTemplateModal";
+import { ExerciseActionsMenu } from "./ExerciseActionsMenu";
 import { AngleToggle } from "./AngleToggle";
 import { WorkoutTabs } from "./WorkoutTabs";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -41,9 +42,11 @@ const DROP_AT_END = "__drop-at-end__";
 function WorkoutEntryRow({
   entry, ex, isCardio, isOpen, rec, prefill, unit, workoutView, supersetMode, isSelected,
   isDragging, dragOffsetY, shiftY, run, tokens,
-  refCallback, gesture, onRowTap, onOpenHistory, onSwap, onRemoveExercise, onSetAngle, onAddSet, onUpdateSet, onRemoveSet,
+  refCallback, gesture, onRowTap, onOpenHistory, onSwap, onRemoveExercise, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote,
 }) {
   const shiftShared = useSharedValue(0);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (isDragging) return;
@@ -163,9 +166,7 @@ function WorkoutEntryRow({
 
           {!supersetMode && (
             <View className="flex-row items-center gap-1.5">
-              <Button label="History" onPress={onOpenHistory} />
-              <Button label="Swap" onPress={onSwap} />
-              <ConfirmDeleteButton onConfirm={onRemoveExercise} />
+              <Button label="Actions" onPress={() => setMenuOpen(true)} />
             </View>
           )}
         </View>
@@ -198,6 +199,27 @@ function WorkoutEntryRow({
           )}
         </View>
       </View>
+
+      {noteOpen && (
+        <NoteModal
+          title={`${ex.name} note`}
+          value={entry.note}
+          onChange={(note) => onSetEntryNote(entry.exerciseId, note)}
+          placeholder="Add exercise note"
+          onClose={() => setNoteOpen(false)}
+        />
+      )}
+
+      {menuOpen && (
+        <ExerciseActionsMenu
+          title={ex.name}
+          onHistory={onOpenHistory}
+          onNote={() => setNoteOpen(true)}
+          onSwap={onSwap}
+          onRemove={onRemoveExercise}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
 
       {isOpen && (
         <View className="mt-3">
@@ -264,8 +286,8 @@ function WorkoutEntryRow({
 export function DayView({
   dateKey, dayWorkouts, activeWorkoutId, exercises, templates, unit, workouts,
   onBack, onSelectWorkout, onCreateWorkout, onDeleteWorkout,
-  onRename, onAddExercise, onRemoveExercise, onSwapExercise,
-  onAddSet, onUpdateSet, onRemoveSet, onApplyTemplate, onOpenHistory, onSaveAsTemplate, onUpdateTemplate, onSetAngle,
+  onRename, onSetNote, onAddExercise, onRemoveExercise, onSwapExercise,
+  onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, onApplyTemplate, onOpenHistory, onSaveAsTemplate, onUpdateTemplate, onSetAngle,
   onAddCustomExercise, onReorderExercise, onCreateSuperset, onUngroupSuperset, workoutView, onOpenExerciseFocus,
 }) {
   const { tokens } = useTheme();
@@ -275,6 +297,7 @@ export function DayView({
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showUpdateTemplate, setShowUpdateTemplate] = useState(false);
   const [swapExId, setSwapExId] = useState(null);
+  const [workoutNoteOpen, setWorkoutNoteOpen] = useState(false);
   const [openExerciseId, setOpenExerciseId] = useState(null);
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
@@ -509,10 +532,21 @@ export function DayView({
         {entries.length > 0 && usedTemplate && linkedTemplates.length > 0 && (
           <Button label="Update template" onPress={() => setShowUpdateTemplate(true)} />
         )}
+        {workout && <NoteButton onToggle={() => setWorkoutNoteOpen(true)} label="Notes" />}
         {dayWorkouts.length > 1 && workout && (
           <ConfirmDeleteIconButton onConfirm={() => onDeleteWorkout(workout.id)} label="Delete this workout" size={18} standardSize />
         )}
       </View>
+
+      {workout && workoutNoteOpen && (
+        <NoteModal
+          title="Workout note"
+          value={workout.note}
+          onChange={onSetNote}
+          placeholder="Add workout note"
+          onClose={() => setWorkoutNoteOpen(false)}
+        />
+      )}
 
       <WorkoutTabs workouts={dayWorkouts} activeId={workout?.id} onSelect={onSelectWorkout} onCreate={onCreateWorkout} />
 
@@ -621,6 +655,7 @@ export function DayView({
               onAddSet={onAddSet}
               onUpdateSet={onUpdateSet}
               onRemoveSet={onRemoveSet}
+              onSetEntryNote={onSetEntryNote}
             />
           );
         })}

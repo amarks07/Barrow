@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft, Pencil } from "lucide-react-native";
@@ -12,6 +12,10 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 // Read-only recap of a past day's workout(s) — editing a workout you already
 // finished is rare, so this avoids surfacing all the day-of logging controls
 // by default. Tapping "Edit" drops into the normal DayView for full control.
+// Not a real exerciseId — just a distinct key for the workout-level note
+// inside the same "which notes are expanded" set the entries use.
+const WORKOUT_NOTE_KEY = "__workout-note__";
+
 export function WorkoutSummaryView({ dateKey, dayWorkouts, activeWorkoutId, exercises, unit, onBack, onSelectWorkout, onEdit }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -19,6 +23,16 @@ export function WorkoutSummaryView({ dateKey, dayWorkouts, activeWorkoutId, exer
   const entries = workout ? workout.entries : [];
   const exMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const speedLabel = unit === "kg" ? "km/h" : "mph";
+  // Read-only recap, so notes still stay behind a tap — nothing here shows
+  // note content until its own button is pressed, same as the editor.
+  const [openNotes, setOpenNotes] = useState(() => new Set());
+  const toggleNote = (key) =>
+    setOpenNotes((cur) => {
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   // Group membership only counts entries that actually render — an entry
   // whose exercise was deleted from the library still occupies a slot in
   // `entries` but is skipped below, so without this a lone surviving
@@ -48,6 +62,15 @@ export function WorkoutSummaryView({ dateKey, dayWorkouts, activeWorkoutId, exer
         </View>
         <Button label="Edit" onPress={onEdit} icon={<Pencil size={12} color={tokens.textDim} />} />
       </View>
+
+      {workout?.note && (
+        <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10, borderBottomWidth: 1.5, borderBottomColor: tokens.line }}>
+          <Button label="Notes" onPress={() => toggleNote(WORKOUT_NOTE_KEY)} />
+          {openNotes.has(WORKOUT_NOTE_KEY) && (
+            <Text style={{ fontSize: 12, color: tokens.textDim, marginTop: 8 }}>{workout.note}</Text>
+          )}
+        </View>
+      )}
 
       {dayWorkouts.length > 1 && <WorkoutTabs workouts={dayWorkouts} activeId={workout?.id} onSelect={onSelectWorkout} />}
 
@@ -85,6 +108,15 @@ export function WorkoutSummaryView({ dateKey, dayWorkouts, activeWorkoutId, exer
                 <Text style={{ fontSize: 10, color: tokens.textDim, marginBottom: 8 }} numberOfLines={1}>
                   {exerciseMeta(ex)}
                 </Text>
+
+                {entry.note && (
+                  <View style={{ marginBottom: 8 }}>
+                    <Button label="Notes" onPress={() => toggleNote(entry.exerciseId)} />
+                    {openNotes.has(entry.exerciseId) && (
+                      <Text style={{ fontSize: 12, color: tokens.textDim, marginTop: 8 }}>{entry.note}</Text>
+                    )}
+                  </View>
+                )}
 
                 {entry.sets.length === 0 ? (
                   <Text style={{ fontSize: 12, color: tokens.textDim }}>{isCardio ? "Not logged" : "No sets logged"}</Text>
