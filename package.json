@@ -5,5 +5,8 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "scripts": {
+    "build:web": "npm run export:web --workspace=apps/mobile && npm run build --workspace=apps/web"
+  }
 }
