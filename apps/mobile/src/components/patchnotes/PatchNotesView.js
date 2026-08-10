@@ -5,6 +5,7 @@ import { IconBtn } from "../ui/IconBtn";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 import { PATCH_NOTES } from "../../content/patchNotes";
+import { NoteList } from "./NoteList";
 
 // Full history of PATCH_NOTES entries, newest first — reachable any time
 // from the "Patch notes" row at the bottom of Preferences. Distinct from
@@ -33,14 +34,7 @@ export function PatchNotesView({ onBack }) {
               <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 16, color: tokens.text }}>{entry.title}</Text>
               <Text style={{ fontSize: 12, color: tokens.textDim }}>v{entry.version}</Text>
             </View>
-            <View style={{ gap: 6 }}>
-              {entry.notes.map((note, j) => (
-                <View key={j} className="flex-row" style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 13, color: tokens.textDim, lineHeight: 18 }}>•</Text>
-                  <Text style={{ flex: 1, fontSize: 13, color: tokens.textDim, lineHeight: 18 }}>{note}</Text>
-                </View>
-              ))}
-            </View>
+            <NoteList notes={entry.notes} tokens={tokens} />
           </View>
         ))}
       </ScrollView>

@@ -5,6 +5,7 @@ import { Megaphone } from "lucide-react-native";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 import { Button } from "../ui/Button";
+import { NoteList } from "./NoteList";
 
 // Shown exactly once per version bump, on app open, for the version just
 // installed (see usePatchNotes) — never reappears once dismissed, until the
@@ -45,14 +46,7 @@ export function PatchNotesModal({ entry, onClose }) {
           <Megaphone size={22} color={tokens.accent} />
           <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: tokens.text, flex: 1 }}>{`What's new in v${entry.version}`}</Text>
         </View>
-        <View className="mb-4" style={{ gap: 6 }}>
-          {entry.notes.map((note, i) => (
-            <View key={i} className="flex-row" style={{ gap: 8 }}>
-              <Text style={{ fontSize: 13, color: tokens.textDim, lineHeight: 18 }}>•</Text>
-              <Text style={{ flex: 1, fontSize: 13, color: tokens.textDim, lineHeight: 18 }}>{note}</Text>
-            </View>
-          ))}
-        </View>
+        <NoteList notes={entry.notes} tokens={tokens} />
         <Button label="Got it" onPress={onClose} variant="solid" size="medium" fullWidth />
       </Animated.View>
     </Modal>
