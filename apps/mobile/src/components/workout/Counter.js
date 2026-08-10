@@ -1,11 +1,25 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
+import {
+  COUNTER_BUTTON_WIDTH,
+  COUNTER_GAP,
+  COUNTER_HEIGHT,
+  COUNTER_LABEL_FONT_SIZE,
+  COUNTER_SYMBOL_FONT_SIZE,
+  COUNTER_VALUE_FONT_SIZE,
+} from "../../theme/dimensions";
 
-// Big reps/weight steppers, plus above, minus below.
-export function Counter({ label, value, onInc, onDec, onChangeValue, autoFocus }) {
+// Reps/weight steppers, plus above, minus below. `size` is "default" (the
+// big Focus/Day view stepper) or "small" (compact inline use, e.g. Profile's
+// feet/inches height entry). Pass `onPress` to make the value display-only
+// (e.g. weight, which opens WeightEditModal instead of typing inline) — the
+// +/- buttons keep working either way.
+export const Counter = forwardRef(function Counter({ label, value, onInc, onDec, onChangeValue, onPress, size = "default" }, ref) {
   const { tokens } = useTheme();
+  const height = COUNTER_HEIGHT[size];
+  const buttonWidth = COUNTER_BUTTON_WIDTH[size];
 
   // The input mirrors `value` (a parsed number) rather than being driven by
   // it directly, so an in-progress fraction like "12." isn't immediately
@@ -25,31 +39,41 @@ export function Counter({ label, value, onInc, onDec, onChangeValue, autoFocus }
     onChangeValue(t);
   };
 
+  const ValueWrapper = onPress ? Pressable : View;
+
   return (
     <View
-      className="flex-row items-center gap-3 rounded-[10px]"
-      style={{ height: 64, paddingHorizontal: 8, borderWidth: 1.5, borderColor: "rgba(0,0,0,0.3)", backgroundColor: tokens.surface }}
+      className="flex-row items-center rounded-[10px]"
+      style={{ height, gap: COUNTER_GAP[size], paddingHorizontal: 8, borderWidth: 1.5, borderColor: "rgba(0,0,0,0.3)", backgroundColor: tokens.surface }}
     >
-      <Pressable onPress={onDec} accessibilityLabel={`Decrease ${label}`} style={{ width: 44, height: 64, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: 24, lineHeight: 26, color: tokens.textDim }}>−</Text>
+      {/* focusable={false}: without it, Android hands this Pressable native
+          view focus on tap, which pulls focus (and the keyboard) off the
+          input beside it — same fix as WeightToolbar's tool chip. */}
+      <Pressable onPress={onDec} focusable={false} accessibilityLabel={`Decrease ${label}`} style={{ width: buttonWidth, height, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ fontSize: COUNTER_SYMBOL_FONT_SIZE[size], lineHeight: COUNTER_SYMBOL_FONT_SIZE[size] + 2, color: tokens.textDim }}>−</Text>
       </Pressable>
 
-      <View className="flex-1 items-center justify-center">
+      <ValueWrapper
+        className="flex-1 items-center justify-center"
+        {...(onPress ? { onPress, accessibilityLabel: `Edit ${label}` } : {})}
+      >
         <TextInput
+          ref={ref}
           keyboardType="decimal-pad"
           value={text}
           onChangeText={handleChangeText}
+          editable={!onPress}
+          pointerEvents={onPress ? "none" : "auto"}
           selectTextOnFocus
-          autoFocus={autoFocus}
           className="w-full text-center"
-          style={{ fontSize: 34, fontWeight: "700", color: tokens.text, fontVariant: ["tabular-nums"], padding: 0 }}
+          style={{ fontSize: COUNTER_VALUE_FONT_SIZE[size], fontWeight: "700", color: tokens.text, fontVariant: ["tabular-nums"], padding: 0 }}
         />
-        <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 13, color: tokens.textDim, lineHeight: 15 }}>{label}</Text>
-      </View>
+        <Text style={{ fontFamily: FONT_DISPLAY, fontSize: COUNTER_LABEL_FONT_SIZE[size], color: tokens.textDim, lineHeight: COUNTER_LABEL_FONT_SIZE[size] + 2 }}>{label}</Text>
+      </ValueWrapper>
 
-      <Pressable onPress={onInc} accessibilityLabel={`Increase ${label}`} style={{ width: 44, height: 64, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: 24, lineHeight: 26, color: tokens.accent }}>+</Text>
+      <Pressable onPress={onInc} focusable={false} accessibilityLabel={`Increase ${label}`} style={{ width: buttonWidth, height, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ fontSize: COUNTER_SYMBOL_FONT_SIZE[size], lineHeight: COUNTER_SYMBOL_FONT_SIZE[size] + 2, color: tokens.accent }}>+</Text>
       </Pressable>
     </View>
   );
-}
+});

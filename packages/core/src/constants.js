@@ -1,6 +1,6 @@
 import { slug } from "./slug";
 
-export const CATEGORIES = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Cardio", "Full Body"];
+export const CATEGORIES = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Cardio", "Full Body", "Stretching"];
 
 // Angle variants (flat/incline/decline) of the same lift are one exercise
 // with a toggle — see ANGLE_VARIANTS below — rather than separate entries.
@@ -53,9 +53,24 @@ const ANGLE_VARIANTS = {
   "dumbbell-bench-press": ["Flat", "Incline", "Decline"],
 };
 
+// Every built-in exercise gets a fields/setFormat pair derived from its
+// category — Cardio tracks minutes+speed as a single lazy-created entry,
+// everything else tracks weight+reps as a numbered, add/remove-able set
+// list. This is the same split the app has always drawn along `category
+// === "Cardio"`; custom exercises (see AddCustomExerciseModal) are the only
+// ones that can deviate from it.
 export const SEED_EXERCISES = RAW_EXERCISES.map(([name, category]) => {
   const id = slug(name);
-  return { id, name, category, custom: false, angles: ANGLE_VARIANTS[id] };
+  const isCardio = category === "Cardio";
+  return {
+    id,
+    name,
+    category,
+    custom: false,
+    angles: ANGLE_VARIANTS[id],
+    fields: isCardio ? ["time", "speed"] : ["weight", "reps"],
+    setFormat: isCardio ? "single" : "sets",
+  };
 });
 
 // Built-in exercises are never edited in place — only added to or
@@ -64,6 +79,17 @@ export const SEED_EXERCISES = RAW_EXERCISES.map(([name, category]) => {
 // browsers that already have an older exercise list saved. Only
 // user-added custom exercises survive from what was saved.
 export function reconcileExercises(saved) {
-  const custom = saved.filter((e) => e.custom);
+  const custom = saved.filter((e) => e.custom).map(backfillFields);
   return [...SEED_EXERCISES, ...custom];
+}
+
+// Custom exercises saved before fields/setFormat existed on the shape (or
+// stretch routines, which never carry them) are missing the properties
+// HistoryView and the workout screens now key off of. Backfill from
+// category using the same split the seed data and AddCustomExerciseModal
+// use, so old saved data doesn't crash on render.
+function backfillFields(e) {
+  if (e.fields || e.type === "stretch") return e;
+  const isCardio = e.category === "Cardio";
+  return { ...e, fields: isCardio ? ["time", "speed"] : ["weight", "reps"], setFormat: isCardio ? "single" : "sets" };
 }

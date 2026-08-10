@@ -1,6 +1,15 @@
 // A day can hold more than one workout, so `workouts` is keyed by date to an
 // array of them (each with its own id) rather than a single workout object.
 
+// Old saved data tagged a workout with the ids of the templates (now
+// routines) it was built from under `templateIds`. Renames that field to
+// `routineIds` in place so old saves keep working under the new name.
+function migrateRoutineIds(w) {
+  if (w.routineIds || !w.templateIds) return w;
+  const { templateIds, ...rest } = w;
+  return { ...rest, routineIds: templateIds };
+}
+
 // Old saved data had one workout object per date. Wrap it in a one-item
 // array (and backfill an id) so every date is uniformly an array from here
 // on — this is what lets a browser with pre-multi-workout data load fine.
@@ -8,9 +17,9 @@ export function migrateWorkouts(saved) {
   const result = {};
   Object.entries(saved).forEach(([dateKey, value]) => {
     if (Array.isArray(value)) {
-      result[dateKey] = value.map((w, i) => (w.id ? w : { ...w, id: `w${Date.now()}-${dateKey}-${i}` }));
+      result[dateKey] = value.map((w, i) => migrateRoutineIds(w.id ? w : { ...w, id: `w${Date.now()}-${dateKey}-${i}` }));
     } else if (value && typeof value === "object") {
-      result[dateKey] = [{ ...value, id: value.id || `w${Date.now()}-${dateKey}` }];
+      result[dateKey] = [migrateRoutineIds({ ...value, id: value.id || `w${Date.now()}-${dateKey}` })];
     }
   });
   return result;

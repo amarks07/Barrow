@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { ArrowLeft, Check, ChevronRight, GripVertical, X } from "lucide-react-native";
+import { ArrowLeft, ChartColumn, Check, ChevronRight, GripVertical, X } from "lucide-react-native";
 import {
   convertWeight,
   dayLabel,
@@ -17,17 +17,18 @@ import {
 import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
 import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
-import { EditableTitle } from "../ui/EditableTitle";
 import { NoteButton, NoteModal } from "../ui/NoteField";
 import { Card } from "../ui/Card";
 import { ExercisePicker } from "../exercises/ExercisePicker";
 import { SetCounters } from "./SetCounters";
-import { CardioCounters } from "./CardioCounters";
-import { SaveAsTemplateModal } from "./SaveAsTemplateModal";
-import { UpdateTemplateModal } from "./UpdateTemplateModal";
+import { SingleCounters } from "./SingleCounters";
+import { StretchPanel } from "../stretch/StretchPanel";
+import { SaveAsRoutineModal } from "./SaveAsRoutineModal";
+import { UpdateRoutineModal } from "./UpdateRoutineModal";
 import { ExerciseActionsMenu } from "./ExerciseActionsMenu";
 import { AngleToggle } from "./AngleToggle";
 import { WorkoutTabs } from "./WorkoutTabs";
+import { WorkoutTimerControl } from "./WorkoutTimerControl";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
@@ -40,13 +41,14 @@ const DROP_AT_END = "__drop-at-end__";
 // per-instance hook, and hooks can't be called a variable number of times
 // inside a .map() in the parent.
 function WorkoutEntryRow({
-  entry, ex, isCardio, isOpen, rec, prefill, unit, workoutView, supersetMode, isSelected,
+  entry, ex, isSingle, isOpen, rec, prefill, unit, workoutView, plateCalculatorEnabled, supersetMode, isSelected,
   isDragging, dragOffsetY, shiftY, run, tokens,
   refCallback, gesture, onRowTap, onOpenHistory, onSwap, onRemoveExercise, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote,
 }) {
   const shiftShared = useSharedValue(0);
   const [noteOpen, setNoteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const isStretch = ex.type === "stretch";
 
   useEffect(() => {
     if (isDragging) return;
@@ -109,7 +111,12 @@ function WorkoutEntryRow({
                       {ex.name}
                     </Text>
                     {ex.angles && <Text style={{ fontSize: 11, color: tokens.accent }}>· {entry.angle || ex.angles[0]}</Text>}
-                    {!isOpen && !isCardio && entry.sets.length > 0 && (
+                    {!isOpen && isStretch && (
+                      <Text style={{ fontSize: 11, color: tokens.textDim }}>
+                        · {ex.stretches.length} pose{ex.stretches.length === 1 ? "" : "s"}
+                      </Text>
+                    )}
+                    {!isOpen && !isSingle && !isStretch && entry.sets.length > 0 && (
                       <Text style={{ fontSize: 11, color: tokens.textDim }}>
                         · {entry.sets.length} set{entry.sets.length > 1 ? "s" : ""}
                       </Text>
@@ -149,7 +156,12 @@ function WorkoutEntryRow({
                         {ex.name}
                       </Text>
                       {ex.angles && <Text style={{ fontSize: 11, color: tokens.accent }}>· {entry.angle || ex.angles[0]}</Text>}
-                      {!isOpen && entry.sets.length > 0 && (
+                      {!isOpen && isStretch && (
+                        <Text style={{ fontSize: 11, color: tokens.textDim }}>
+                          · {ex.stretches.length} pose{ex.stretches.length === 1 ? "" : "s"}
+                        </Text>
+                      )}
+                      {!isOpen && !isStretch && entry.sets.length > 0 && (
                         <Text style={{ fontSize: 11, color: tokens.textDim }}>
                           · {entry.sets.length} set{entry.sets.length > 1 ? "s" : ""}
                         </Text>
@@ -233,8 +245,10 @@ function WorkoutEntryRow({
             </View>
           )}
 
-          {isCardio ? (
-            <CardioCounters entry={entry} unit={unit} onAddSet={onAddSet} onUpdateSet={onUpdateSet} />
+          {isStretch ? (
+            <StretchPanel ex={ex} />
+          ) : isSingle ? (
+            <SingleCounters entry={entry} ex={ex} unit={unit} plateCalculatorEnabled={plateCalculatorEnabled} onAddSet={onAddSet} onUpdateSet={onUpdateSet} />
           ) : (
             <>
               {entry.sets.length === 0 && rec && (
@@ -249,6 +263,7 @@ function WorkoutEntryRow({
                   sets={entry.sets}
                   set={set}
                   unit={unit}
+                  plateCalculatorEnabled={plateCalculatorEnabled}
                   onUpdate={(field, value) => onUpdateSet(entry.exerciseId, set.id, field, value)}
                   onRemove={() => onRemoveSet(entry.exerciseId, set.id)}
                 />
@@ -284,23 +299,25 @@ function WorkoutEntryRow({
 }
 
 export function DayView({
-  dateKey, dayWorkouts, activeWorkoutId, exercises, templates, unit, workouts,
+  dateKey, dayWorkouts, activeWorkoutId, exercises, routines, unit, workouts,
   onBack, onSelectWorkout, onCreateWorkout, onDeleteWorkout,
-  onRename, onSetNote, onAddExercise, onRemoveExercise, onSwapExercise,
-  onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, onApplyTemplate, onOpenHistory, onSaveAsTemplate, onUpdateTemplate, onSetAngle,
-  onAddCustomExercise, onReorderExercise, onCreateSuperset, onUngroupSuperset, workoutView, onOpenExerciseFocus,
+  onSetNote, onAddExercise, onRemoveExercise, onSwapExercise,
+  onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, onApplyRoutine, onOpenHistory, onSaveAsRoutine, onUpdateRoutine, onSetAngle,
+  onAddCustomExercise, stretchRoutinesEnabled, onReorderExercise, onCreateSuperset, onUngroupSuperset, workoutView, plateCalculatorEnabled, onOpenExerciseFocus,
+  onOpenSummary,
 }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const [showPicker, setShowPicker] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
-  const [showUpdateTemplate, setShowUpdateTemplate] = useState(false);
+  const [showRoutines, setShowRoutines] = useState(false);
+  const [showSaveRoutine, setShowSaveRoutine] = useState(false);
+  const [showUpdateRoutine, setShowUpdateRoutine] = useState(false);
   const [swapExId, setSwapExId] = useState(null);
   const [workoutNoteOpen, setWorkoutNoteOpen] = useState(false);
   const [openExerciseId, setOpenExerciseId] = useState(null);
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
+  const [supersetsMenuOpen, setSupersetsMenuOpen] = useState(false);
   const [supersetMode, setSupersetMode] = useState(false);
   const [supersetSelection, setSupersetSelection] = useState([]);
   const [removeSupersetMode, setRemoveSupersetMode] = useState(false);
@@ -315,11 +332,11 @@ export function DayView({
 
   const workout = dayWorkouts.find((w) => w.id === activeWorkoutId) || dayWorkouts[0];
   const entries = workout ? workout.entries : [];
-  const linkedTemplateIds = workout?.templateIds || [];
-  const usedTemplate = linkedTemplateIds.length > 0;
-  const linkedTemplates = useMemo(
-    () => templates.filter((t) => linkedTemplateIds.includes(t.id)),
-    [templates, linkedTemplateIds]
+  const linkedRoutineIds = workout?.routineIds || [];
+  const usedRoutine = linkedRoutineIds.length > 0;
+  const linkedRoutines = useMemo(
+    () => routines.filter((r) => linkedRoutineIds.includes(r.id)),
+    [routines, linkedRoutineIds]
   );
   const hasAnyGroup = entries.some((e) => e.supersetId);
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
@@ -516,27 +533,77 @@ export function DayView({
           gap: 12,
           paddingHorizontal: 20,
           paddingTop: 16,
-          paddingBottom: 16,
-          borderBottomWidth: 1.5,
-          borderBottomColor: tokens.line,
         }}
       >
         <IconBtn label="Back" onPress={onBack}>
           <ArrowLeft size={17} color={tokens.text} />
         </IconBtn>
         <View style={{ flex: 1 }}>
-          <EditableTitle value={workout ? workout.name : "Workout"} onChange={onRename} textStyle={{ fontSize: 16, fontWeight: "600" }} />
-          <Text style={{ fontSize: 11, color: tokens.textDim }}>{dayLabel(dateKey)}</Text>
+          <Text style={{ fontSize: 16, fontWeight: "600", color: tokens.text }} numberOfLines={1}>
+            {dayLabel(dateKey)}
+          </Text>
         </View>
-        {entries.length > 0 && !usedTemplate && <Button label="Save as template" onPress={() => setShowSaveTemplate(true)} />}
-        {entries.length > 0 && usedTemplate && linkedTemplates.length > 0 && (
-          <Button label="Update template" onPress={() => setShowUpdateTemplate(true)} />
-        )}
-        {workout && <NoteButton onToggle={() => setWorkoutNoteOpen(true)} label="Notes" />}
-        {dayWorkouts.length > 1 && workout && (
-          <ConfirmDeleteIconButton onConfirm={() => onDeleteWorkout(workout.id)} label="Delete this workout" size={18} standardSize />
-        )}
       </View>
+
+      <WorkoutTabs workouts={dayWorkouts} activeId={workout?.id} onSelect={onSelectWorkout} onCreate={onCreateWorkout} />
+
+      <View style={{ borderBottomWidth: 1.5, borderBottomColor: tokens.line }} />
+
+      {workout && !supersetMode && !removeSupersetMode && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: 4,
+          }}
+        >
+          {supersetsMenuOpen ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 }}>
+              <Button
+                label="Create superset"
+                onPress={() => {
+                  setSupersetMode(true);
+                  setOpenExerciseId(null);
+                  setSupersetsMenuOpen(false);
+                }}
+              />
+              <Button
+                label="Delete superset"
+                disabled={!hasAnyGroup}
+                onPress={() => {
+                  setRemoveSupersetMode(true);
+                  setOpenExerciseId(null);
+                  setSupersetsMenuOpen(false);
+                }}
+              />
+              <Button label="Cancel" onPress={() => setSupersetsMenuOpen(false)} />
+            </View>
+          ) : (
+            <>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 }}>
+                {entries.length > 0 && !usedRoutine && <Button label="Save as routine" onPress={() => setShowSaveRoutine(true)} />}
+                {entries.length > 0 && usedRoutine && linkedRoutines.length > 0 && (
+                  <Button label="Update routine" onPress={() => setShowUpdateRoutine(true)} />
+                )}
+                {entries.length >= 2 && (
+                  <Button label="Supersets" onPress={() => setSupersetsMenuOpen(true)} />
+                )}
+                <NoteButton onToggle={() => setWorkoutNoteOpen(true)} label="Notes" />
+                {entries.length > 0 && (
+                  <Button label="Summary" onPress={() => onOpenSummary(workout.id)} icon={<ChartColumn size={12} color={tokens.textDim} />} />
+                )}
+              </View>
+              {dayWorkouts.length > 1 && (
+                <ConfirmDeleteIconButton onConfirm={() => onDeleteWorkout(workout.id)} label="Delete workout" size={18} standardSize />
+              )}
+            </>
+          )}
+        </View>
+      )}
 
       {workout && workoutNoteOpen && (
         <NoteModal
@@ -548,9 +615,7 @@ export function DayView({
         />
       )}
 
-      <WorkoutTabs workouts={dayWorkouts} activeId={workout?.id} onSelect={onSelectWorkout} onCreate={onCreateWorkout} />
-
-      {(entries.length >= 2 || supersetMode || removeSupersetMode) && (
+      {(supersetMode || removeSupersetMode) && (
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, paddingHorizontal: 20, paddingTop: 8 }}>
           {supersetMode ? (
             <>
@@ -560,29 +625,10 @@ export function DayView({
               <Button label="Cancel" onPress={cancelSuperset} />
               <Button label="Save" onPress={saveSuperset} disabled={supersetSelection.length < 2} variant="solid" />
             </>
-          ) : removeSupersetMode ? (
+          ) : (
             <>
               <Text style={{ fontSize: 11, color: tokens.textDim, flex: 1 }}>Tap an exercise in a superset to remove it</Text>
               <Button label="Cancel" onPress={() => setRemoveSupersetMode(false)} />
-            </>
-          ) : (
-            <>
-              <Button
-                label="Create superset"
-                onPress={() => {
-                  setSupersetMode(true);
-                  setOpenExerciseId(null);
-                }}
-              />
-              {hasAnyGroup && (
-                <Button
-                  label="Remove superset"
-                  onPress={() => {
-                    setRemoveSupersetMode(true);
-                    setOpenExerciseId(null);
-                  }}
-                />
-              )}
             </>
           )}
         </View>
@@ -594,17 +640,17 @@ export function DayView({
       >
         {entries.length === 0 && (
           <Text style={{ fontSize: 12, color: tokens.textDim }} className="py-3">
-            Tap "+ Add exercise" below, or "Load template" to get started.
+            Tap "+ Add exercise" below, or "Load routine" to get started.
           </Text>
         )}
         {entries.map((entry, entryIndex) => {
           const ex = exMap[entry.exerciseId];
           if (!ex) return null;
-          const isCardio = ex.category === "Cardio";
+          const isSingle = ex.setFormat === "single";
           const isOpen = workoutView !== "focus" && openExerciseId === entry.exerciseId;
           const lastSet = entry.sets[entry.sets.length - 1];
           const { repLow, repHigh } = getRepRange(entry.exerciseId, workouts, workout.id);
-          const rec = !isCardio && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workout.id, repLow, repHigh) : null;
+          const rec = !isSingle && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workout.id, repLow, repHigh) : null;
           const prefill = lastSet
             ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
             : rec
@@ -629,12 +675,13 @@ export function DayView({
               key={entry.exerciseId}
               entry={entry}
               ex={ex}
-              isCardio={isCardio}
+              isSingle={isSingle}
               isOpen={isOpen}
               rec={rec}
               prefill={prefill}
               unit={unit}
               workoutView={workoutView}
+              plateCalculatorEnabled={plateCalculatorEnabled}
               supersetMode={supersetMode}
               isSelected={isSelected}
               isDragging={isDragging}
@@ -682,12 +729,16 @@ export function DayView({
       </ScrollView>
 
       <Button
-        label="Load template"
-        onPress={() => setShowTemplates(true)}
+        label="Load routine"
+        onPress={() => setShowRoutines(true)}
         variant="solid"
         size="medium"
         style={{ position: "absolute", right: 20, bottom: 20 + insets.bottom, zIndex: 25 }}
       />
+
+      <View style={{ position: "absolute", left: 20, bottom: 20 + insets.bottom, zIndex: 25 }}>
+        <WorkoutTimerControl dateKey={dateKey} workoutId={workout?.id} />
+      </View>
 
       {showPicker && (
         <ExercisePicker
@@ -705,6 +756,7 @@ export function DayView({
           }}
           onClose={() => setShowPicker(false)}
           onAddCustom={onAddCustomExercise}
+          stretchRoutinesEnabled={stretchRoutinesEnabled}
           doneLabel="Add"
         />
       )}
@@ -722,58 +774,59 @@ export function DayView({
           }}
           onClose={() => setSwapExId(null)}
           onAddCustom={onAddCustomExercise}
+          stretchRoutinesEnabled={stretchRoutinesEnabled}
         />
       )}
 
-      {showSaveTemplate && (
-        <SaveAsTemplateModal
-          onClose={() => setShowSaveTemplate(false)}
+      {showSaveRoutine && (
+        <SaveAsRoutineModal
+          onClose={() => setShowSaveRoutine(false)}
           onSave={(name) => {
-            onSaveAsTemplate(dateKey, workout.id, name);
-            setShowSaveTemplate(false);
+            onSaveAsRoutine(dateKey, workout.id, name);
+            setShowSaveRoutine(false);
           }}
         />
       )}
 
-      {showUpdateTemplate && (
-        <UpdateTemplateModal
-          templates={linkedTemplates}
-          onClose={() => setShowUpdateTemplate(false)}
-          onConfirm={(templateId) => {
-            onUpdateTemplate(dateKey, workout.id, templateId);
-            setShowUpdateTemplate(false);
+      {showUpdateRoutine && (
+        <UpdateRoutineModal
+          routines={linkedRoutines}
+          onClose={() => setShowUpdateRoutine(false)}
+          onConfirm={(routineId) => {
+            onUpdateRoutine(dateKey, workout.id, routineId);
+            setShowUpdateRoutine(false);
           }}
         />
       )}
 
-      {showTemplates && (
+      {showRoutines && (
         <View className="absolute" style={{ top: 0, left: 0, right: 0, bottom: 0, zIndex: 30, backgroundColor: tokens.bg }}>
           <View
             className="flex-row items-center gap-3 px-5 pb-4"
             style={{ borderBottomWidth: 1.5, borderBottomColor: tokens.line }}
           >
-            <IconBtn label="Close" onPress={() => setShowTemplates(false)}>
+            <IconBtn label="Close" onPress={() => setShowRoutines(false)}>
               <X size={17} color={tokens.text} />
             </IconBtn>
-            <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: tokens.text }}>Pull in a template</Text>
+            <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: tokens.text }}>Pull in a routine</Text>
           </View>
           <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 24, gap: 8 }}>
-            {templates.length === 0 && (
+            {routines.length === 0 && (
               <Text style={{ fontSize: 13, color: tokens.textDim }}>
-                No templates yet — close this and add exercises directly, or build a template from the Templates tab.
+                No routines yet — close this and add exercises directly, or build a routine from the Routines tab.
               </Text>
             )}
-            {templates.map((t) => (
+            {routines.map((r) => (
               <Pressable
-                key={t.id}
+                key={r.id}
                 onPress={() => {
-                  onApplyTemplate(t.id);
-                  setShowTemplates(false);
+                  onApplyRoutine(r.id);
+                  setShowRoutines(false);
                 }}
               >
                 <Card style={{ padding: 16 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>{t.name}</Text>
-                  <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2 }}>{t.exerciseIds.length} exercises</Text>
+                  <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>{r.name}</Text>
+                  <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2 }}>{r.exerciseIds.length} exercises</Text>
                 </Card>
               </Pressable>
             ))}

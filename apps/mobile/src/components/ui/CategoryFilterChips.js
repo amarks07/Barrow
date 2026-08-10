@@ -46,6 +46,10 @@ export function CategoryFilterChips({ value, onChange }) {
               // Button.js for why the key needs to change too.
               key={`${cat}-${active}`}
               onPress={() => onChange(val)}
+              // See Button.js: without this, Android hands the tapped chip
+              // native view focus, pulling focus (and the keyboard) off the
+              // search field above.
+              focusable={false}
               style={{
                 height: CHIP_HEIGHT,
                 paddingHorizontal: 12,

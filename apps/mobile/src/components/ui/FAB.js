@@ -6,7 +6,7 @@ const SIZE = 48;
 const SHADOW_OFFSET = 3;
 
 // Default `bottom` is a small flat margin — FAB is only ever used inside a
-// tab screen (Exercises/Templates), and material-top-tabs lays the tab bar
+// tab screen (Exercises/Routines), and material-top-tabs lays the tab bar
 // out as a sibling (not an overlay), so each scene already stops right
 // above it. No extra clearance or safe-area math needed here.
 //
@@ -16,7 +16,7 @@ const SHADOW_OFFSET = 3;
 // component — both were suspected of quietly dropping the shape styles
 // (width/height/borderRadius) on Android, which is what made this render
 // as a plain square.
-export function FAB({ onPress, label, bottom = 20 }) {
+export function FAB({ onPress, label, bottom = 20, icon }) {
   const { tokens } = useTheme();
   const [pressed, setPressed] = useState(false);
 
@@ -53,7 +53,7 @@ export function FAB({ onPress, label, bottom = 20 }) {
           transform: [{ scale: pressed ? 0.95 : 1 }],
         }}
       >
-        <Text style={{ fontSize: 24, lineHeight: 26, fontWeight: "500", color: "#121214" }}>+</Text>
+        {icon || <Text style={{ fontSize: 24, lineHeight: 26, fontWeight: "500", color: "#121214" }}>+</Text>}
       </Pressable>
     </View>
   );

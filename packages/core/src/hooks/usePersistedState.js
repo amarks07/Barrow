@@ -12,7 +12,7 @@ const SAVE_DEBOUNCE_MS = 400;
 export function usePersistedState(
   key,
   initialValue,
-  { serialize = JSON.stringify, deserialize = JSON.parse, storage } = {}
+  { serialize = JSON.stringify, deserialize = JSON.parse, storage, legacyKey } = {}
 ) {
   const [value, setValue] = useState(initialValue);
   const [hydrated, setHydrated] = useState(false);
@@ -21,7 +21,19 @@ export function usePersistedState(
     let cancelled = false;
     (async () => {
       try {
-        const saved = await storage.getItem(key);
+        let saved = await storage.getItem(key);
+        // One-time carry-forward from a renamed key: if nothing's under the
+        // new key yet but the old key still has data, adopt it and copy it
+        // to the new key. The old key is left in place (unused, harmless)
+        // rather than deleted, so there's no risk of losing data on write
+        // failure.
+        if ((saved === null || saved === undefined) && legacyKey) {
+          const legacy = await storage.getItem(legacyKey);
+          if (legacy !== null && legacy !== undefined) {
+            saved = legacy;
+            storage.setItem(key, legacy).catch((e) => console.error(`Barrow: failed to migrate ${legacyKey} to ${key}`, e));
+          }
+        }
         if (!cancelled && saved !== null && saved !== undefined) setValue(deserialize(saved));
       } catch (e) {
         console.error(`Barrow: failed to load ${key}`, e);

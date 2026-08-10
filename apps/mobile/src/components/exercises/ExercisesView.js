@@ -10,12 +10,15 @@ import { AddCustomExerciseModal } from "./AddCustomExerciseModal";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
+// Stretch routines are excluded here unconditionally — their home is the
+// dedicated Stretches tab (see StretchRoutinesView), not this list.
 export function ExercisesView({ exercises, exerciseView, setExerciseView, onOpenHistory, onAddCustom, onDeleteExercise }) {
   const { tokens } = useTheme();
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
   const filtered = exercises
+    .filter((e) => e.type !== "stretch")
     .filter((e) => e.name.toLowerCase().includes(query.toLowerCase()) && (categoryFilter === "all" || e.category === categoryFilter))
     .sort((a, b) => a.name.localeCompare(b.name));
   const grouped = CATEGORIES.map((cat) => ({ cat, items: filtered.filter((e) => e.category === cat) })).filter((g) => g.items.length);
@@ -78,8 +81,8 @@ export function ExercisesView({ exercises, exerciseView, setExerciseView, onOpen
       {showAdd && (
         <AddCustomExerciseModal
           onClose={() => setShowAdd(false)}
-          onSave={(name, category, muscle) => {
-            onAddCustom(name, category, muscle);
+          onSave={(name, category, muscle, fields, setFormat) => {
+            onAddCustom(name, category, muscle, fields, setFormat);
             setShowAdd(false);
           }}
         />

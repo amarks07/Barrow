@@ -6,7 +6,7 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 import { Button } from "../ui/Button";
 import { ConfirmDeleteButton } from "../ui/ConfirmDeleteButton";
 
-// Same bottom-sheet treatment as SaveAsTemplateModal/UpdateTemplateModal —
+// Same bottom-sheet treatment as SaveAsRoutineModal/UpdateRoutineModal —
 // collects an exercise row's History/Note/Swap/Remove actions behind one
 // "Actions" button instead of four separate pills crowding the row.
 export function ExerciseActionsMenu({ title, onHistory, onNote, onSwap, onRemove, onClose }) {

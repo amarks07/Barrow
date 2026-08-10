@@ -1,16 +1,46 @@
-import { Image, ScrollView, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, User } from "lucide-react-native";
+import { ArrowLeft } from "lucide-react-native";
 import { IconBtn } from "../ui/IconBtn";
-import { ProfileField } from "./ProfileField";
+import { MenuRow } from "../ui/MenuRow";
+import { ProfileSettingsView } from "./ProfileSettingsView";
+import { BiometricsView } from "./BiometricsView";
 import { CloudBackupSection } from "./CloudBackupSection";
+import { DangerZoneSection } from "./DangerZoneSection";
+import { SignInModal } from "./SignInModal";
+import { EditableAvatar } from "./EditableAvatar";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
-export function ProfileView({ profile, onUpdate, onClose, cloudSync }) {
+// Entry point for the profile flow: a small hub linking out to the two
+// pages the old single scrolling Profile screen was split into — account
+// identity (ProfileSettingsView) and physical stats (BiometricsView) — plus
+// Profile ID and cloud backup, which stay here rather than moving into
+// either sub-page. Each sub-page's own back button returns here; `onClose`
+// (this hub's back button) is what exits the whole flow. Reachable whether
+// or not the user is signed in — CloudBackupSection shows a "Sign in" CTA
+// in place of sync status/controls when there's no session, and opens
+// SignInModal (below) on tap.
+export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWorkoutData }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const initials = `${profile.firstName?.[0] || ""}${profile.lastName?.[0] || ""}`.toUpperCase();
+  const [page, setPage] = useState("hub"); // "hub" | "settings" | "biometrics"
+  const [showSignIn, setShowSignIn] = useState(false);
+
+  // A successful sign-in closes the modal on its own rather than waiting
+  // for the user to dismiss it — same as the old MainStack flow this
+  // replaced (see MainStack's onOpenProfile).
+  useEffect(() => {
+    if (cloudSync.session) setShowSignIn(false);
+  }, [cloudSync.session]);
+
+  if (page === "settings") {
+    return <ProfileSettingsView profile={profile} onUpdate={onUpdate} onBack={() => setPage("hub")} cloudSync={cloudSync} />;
+  }
+  if (page === "biometrics") {
+    return <BiometricsView profile={profile} onUpdate={onUpdate} onBack={() => setPage("hub")} />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.bg, paddingTop: insets.top }}>
@@ -25,35 +55,32 @@ export function ProfileView({ profile, onUpdate, onClose, cloudSync }) {
       </View>
       <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingTop: 20, paddingBottom: 24 + insets.bottom }}>
         <View className="items-center mb-6">
-          <View
-            className="items-center justify-center overflow-hidden"
-            style={{ width: 84, height: 84, borderRadius: 999, backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.lineStrong }}
-          >
-            {profile.pictureUrl ? (
-              <Image source={{ uri: profile.pictureUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-            ) : initials ? (
-              <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 24, color: tokens.textDim }}>{initials}</Text>
-            ) : (
-              <User size={32} color={tokens.textDim} />
-            )}
-          </View>
+          <EditableAvatar profile={profile} onUpdate={onUpdate} cloudSync={cloudSync} />
+          {(profile.firstName || profile.lastName) && (
+            <Text style={{ fontSize: 16, fontWeight: "600", color: tokens.text, marginTop: 10 }}>
+              {profile.firstName} {profile.lastName}
+            </Text>
+          )}
         </View>
 
-        <ProfileField label="Profile picture URL" value={profile.pictureUrl} onChange={(v) => onUpdate("pictureUrl", v)} placeholder="https://…" />
-        <ProfileField label="First name" value={profile.firstName} onChange={(v) => onUpdate("firstName", v)} />
-        <ProfileField label="Last name" value={profile.lastName} onChange={(v) => onUpdate("lastName", v)} />
-        <ProfileField label="Username" value={profile.username} onChange={(v) => onUpdate("username", v)} />
-        <ProfileField label="Email" keyboardType="email-address" value={profile.email} onChange={(v) => onUpdate("email", v)} />
+        <View style={{ gap: 10 }}>
+          <MenuRow label="Profile settings" subtitle="Name, username, email" onPress={() => setPage("settings")} />
+          <MenuRow label="Biometrics" subtitle="Birthday, gender, height, weight" onPress={() => setPage("biometrics")} />
+        </View>
 
-        <View className="mt-2">
+        <View className="mt-6">
           <Text style={{ fontSize: 11, color: tokens.textDim }} className="mb-1">
             Profile ID
           </Text>
           <Text style={{ fontSize: 14, color: tokens.textDim, fontVariant: ["tabular-nums"] }}>{profile.profileId}</Text>
         </View>
 
-        <CloudBackupSection cloudSync={cloudSync} />
+        <CloudBackupSection cloudSync={cloudSync} profile={profile} onSignIn={() => setShowSignIn(true)} />
+
+        <DangerZoneSection onClearWorkoutData={onClearWorkoutData} cloudSync={cloudSync} profile={profile} />
       </ScrollView>
+
+      {showSignIn && <SignInModal cloudSync={cloudSync} onClose={() => setShowSignIn(false)} />}
     </View>
   );
 }

@@ -14,11 +14,16 @@ import { AddCustomExerciseModal } from "./AddCustomExerciseModal";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
-// Used by the day view (add/swap an exercise) and the template builder.
+// Used by the day view (add/swap an exercise) and the routine builder.
 // `onAddCustom`, when passed, shows a FAB to define and immediately pick a
-// custom exercise without leaving the picker. Presented as a full-screen
-// Modal so any screen can pop it up ad hoc, matching the web app's
-// absolute-inset overlay pattern.
+// custom exercise without leaving the picker. Stretch routines are built
+// and edited exclusively from their own Stretches tab (see
+// StretchRoutinesView) — this picker only ever lets you pick an *existing*
+// one, and only when `stretchRoutinesEnabled` is true (the preferences
+// toggle gating the whole feature), so they're excluded from the pickable
+// list entirely while it's off. Presented as a full-screen Modal so any
+// screen can pop it up ad hoc, matching the web app's absolute-inset
+// overlay pattern.
 export function ExercisePicker({
   exercises,
   exerciseView,
@@ -27,6 +32,7 @@ export function ExercisePicker({
   onUnpick,
   onClose,
   onAddCustom,
+  stretchRoutinesEnabled = false,
   alreadyPicked = [],
   title = "Choose exercise",
   doneLabel,
@@ -37,7 +43,8 @@ export function ExercisePicker({
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showAddCustom, setShowAddCustom] = useState(false);
 
-  const filtered = exercises.filter(
+  const pickableExercises = stretchRoutinesEnabled ? exercises : exercises.filter((e) => e.type !== "stretch");
+  const filtered = pickableExercises.filter(
     (e) => e.name.toLowerCase().includes(query.toLowerCase()) && (categoryFilter === "all" || e.category === categoryFilter)
   );
   const grouped = CATEGORIES.map((cat) => ({ cat, items: filtered.filter((e) => e.category === cat) })).filter(
@@ -75,7 +82,11 @@ export function ExercisePicker({
           />
         </View>
         <CategoryFilterChips value={categoryFilter} onChange={setCategoryFilter} />
-        <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: doneLabel ? 88 + insets.bottom : 24 }}>
+        <ScrollView
+          style={{ flex: 1, paddingHorizontal: 20 }}
+          contentContainerStyle={{ paddingBottom: doneLabel ? 88 + insets.bottom : 24 }}
+          keyboardShouldPersistTaps="handled"
+        >
           {exerciseView === "flat" ? (
             <ExerciseRows items={filtered} onPick={onPick} onUnpick={onUnpick} alreadyPicked={alreadyPicked} />
           ) : (
@@ -124,8 +135,8 @@ export function ExercisePicker({
         {showAddCustom && (
           <AddCustomExerciseModal
             onClose={() => setShowAddCustom(false)}
-            onSave={(name, category, muscle) => {
-              onPick(onAddCustom(name, category, muscle));
+            onSave={(name, category, muscle, fields, setFormat) => {
+              onPick(onAddCustom(name, category, muscle, fields, setFormat));
               setShowAddCustom(false);
             }}
           />

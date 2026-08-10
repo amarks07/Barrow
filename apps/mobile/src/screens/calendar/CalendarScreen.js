@@ -8,11 +8,20 @@ import { useTheme } from "../../theme/ThemeProvider";
 
 export function CalendarScreen({ navigation }) {
   const { tokens } = useTheme();
-  const { workouts, getOrCreateWorkoutForDate } = useAppState();
+  const { workouts, getOrCreateWorkoutForDate, dayWorkoutsActions } = useAppState();
   const [monthCursor, setMonthCursor] = useState(new Date());
 
   const openDate = (dateKey) => {
     const workoutId = getOrCreateWorkoutForDate(dateKey);
+    navigation.navigate("Day", { dateKey, workoutId });
+  };
+
+  // Unlike tapping a calendar day (which resumes that day's existing
+  // workout), the pill is an explicit "start a workout" action — it should
+  // always create a fresh workout for today, even if one already exists.
+  const startNewWorkout = () => {
+    const dateKey = toKey(new Date());
+    const workoutId = dayWorkoutsActions.createWorkout(dateKey);
     navigation.navigate("Day", { dateKey, workoutId });
   };
 
@@ -26,7 +35,7 @@ export function CalendarScreen({ navigation }) {
       >
         <CalendarGrid monthCursor={monthCursor} setMonthCursor={setMonthCursor} workouts={workouts} onSelectDay={openDate} />
       </ScrollView>
-      <StartWorkoutPill onPress={() => openDate(toKey(new Date()))} />
+      <StartWorkoutPill onPress={startNewWorkout} />
     </View>
   );
 }

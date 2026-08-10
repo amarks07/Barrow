@@ -11,13 +11,16 @@ const POINTER_SAVE_DEBOUNCE_MS = 400;
 
 export function ExerciseFocusScreen({ route, navigation }) {
   const { dateKey, workoutId, exerciseId, focusSetId, focusField } = route.params;
-  const { exercises, templates, unit, workouts, setWorkouts, nextId, focusSupersetGrouping, focusNotificationEnabled } = useAppState();
+  const {
+    exercises, routines, unit, workouts, setWorkouts, nextId, focusSupersetGrouping, focusNotificationEnabled,
+    plateCalculatorEnabled,
+  } = useAppState();
 
   const workoutActions = useWorkoutActions({
     selectedDate: dateKey,
     selectedWorkoutId: workoutId,
     setWorkouts,
-    templates,
+    routines,
     exercises,
     unit,
     nextId,
@@ -94,12 +97,14 @@ export function ExerciseFocusScreen({ route, navigation }) {
       // still forces a remount — otherwise React Navigation's in-place
       // param update wouldn't retrigger the one-shot autoFocus below.
       key={`${dateKey}:${workoutId}:${exerciseId}:${focusSetId || ""}:${focusField || ""}`}
+      dateKey={dateKey}
       dayWorkouts={workouts[dateKey] || []}
       activeWorkoutId={workoutId}
       initialExerciseId={exerciseId}
       exercises={exercises}
       unit={unit}
       workouts={workouts}
+      plateCalculatorEnabled={plateCalculatorEnabled}
       onBack={() => navigation.goBack()}
       onSetAngle={workoutActions.onSetAngle}
       onAddSet={workoutActions.onAddSet}

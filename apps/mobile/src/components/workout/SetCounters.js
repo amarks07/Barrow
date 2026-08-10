@@ -4,10 +4,11 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { Button } from "../ui/Button";
 import { ConfirmDeleteButton } from "../ui/ConfirmDeleteButton";
 import { StrengthFields } from "./StrengthFields";
+import { SideToggle } from "./SideToggle";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
-export function SetCounters({ sets, set, unit, onUpdate, onRemove, autoFocusField }) {
+export function SetCounters({ sets, set, unit, plateCalculatorEnabled, onUpdate, onRemove, autoFocusField }) {
   const { tokens } = useTheme();
   const [swipeArmed, setSwipeArmed] = useState(false);
   const armedTimeout = useRef(null);
@@ -64,24 +65,28 @@ export function SetCounters({ sets, set, unit, onUpdate, onRemove, autoFocusFiel
         }}
       >
         <View className="flex-row items-center justify-between gap-2 mb-2">
-          <Text
-            style={{
-              fontFamily: FONT_DISPLAY,
-              fontSize: 14,
-              textTransform: "uppercase",
-              color: swipeArmed ? tokens.danger : tokens.textDim,
-            }}
-          >
-            {set.warmup ? "Warmup" : "Working Set"} {displayNumber}
-            {swipeArmed ? " · swipe again to delete" : ""}
-          </Text>
-          <View className="flex-row items-center gap-1.5">
+          <View style={{ flex: 1 }}>
+            <Text
+              numberOfLines={1}
+              style={{
+                fontFamily: FONT_DISPLAY,
+                fontSize: 14,
+                textTransform: "uppercase",
+                color: swipeArmed ? tokens.danger : tokens.textDim,
+              }}
+            >
+              {set.warmup ? "Warmup" : "Working Set"} {displayNumber}
+              {swipeArmed ? " · swipe again to delete" : ""}
+            </Text>
+          </View>
+          <SideToggle value={set.side || "both"} onChange={(side) => onUpdate("side", side)} />
+          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
             <Button label="Warmup" onPress={() => onUpdate("warmup", !set.warmup)} variant={set.warmup ? "solid" : "outline"} />
             <ConfirmDeleteButton onConfirm={onRemove} />
           </View>
         </View>
         <View style={{ gap: 8 }}>
-          <StrengthFields set={set} unit={unit} onUpdate={onUpdate} autoFocusField={autoFocusField} />
+          <StrengthFields set={set} unit={unit} plateCalculatorEnabled={plateCalculatorEnabled} onUpdate={onUpdate} autoFocusField={autoFocusField} />
         </View>
       </View>
     </GestureDetector>

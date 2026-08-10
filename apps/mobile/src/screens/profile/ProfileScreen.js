@@ -1,10 +1,19 @@
 import { ProfileView } from "../../components/profile/ProfileView";
 import { useAppState } from "../../state/AppStateProvider";
 
-// Only reached when signed in now — MainStack handles the signed-out case
-// by showing SignInModal as a local overlay instead of navigating here, so
-// this route never needs to decide between the two.
+// Reachable whether or not the user is signed in — ProfileView (via
+// CloudBackupSection) shows a "Sign in" CTA in place of sync status when
+// there's no session, rather than this screen bouncing back to Tabs.
 export function ProfileScreen({ navigation }) {
-  const { profile, updateProfile, cloudSync } = useAppState();
-  return <ProfileView profile={profile} onUpdate={updateProfile} onClose={() => navigation.goBack()} cloudSync={cloudSync} />;
+  const { profile, updateProfile, cloudSync, clearWorkoutData } = useAppState();
+
+  return (
+    <ProfileView
+      profile={profile}
+      onUpdate={updateProfile}
+      onClose={() => navigation.goBack()}
+      cloudSync={cloudSync}
+      onClearWorkoutData={clearWorkoutData}
+    />
+  );
 }

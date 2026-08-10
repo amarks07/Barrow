@@ -13,6 +13,7 @@ export function ExerciseRows({ items, onPick, onUnpick, alreadyPicked }) {
           <Pressable
             key={ex.id}
             onPress={() => (picked && onUnpick ? onUnpick(ex) : onPick(ex))}
+            focusable={false}
             style={{
               width: "48.5%",
               padding: 12,

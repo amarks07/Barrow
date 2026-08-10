@@ -5,7 +5,7 @@ export function useDayWorkouts({ setWorkouts, nextId }) {
     const id = nextId();
     setWorkouts((prev) => ({
       ...prev,
-      [dateKey]: [...(prev[dateKey] || []), { id, name: "Workout", entries: [], templateIds: [] }],
+      [dateKey]: [...(prev[dateKey] || []), { id, entries: [], routineIds: [] }],
     }));
     return id;
   };

@@ -6,6 +6,8 @@ export function PreferencesScreen({ navigation }) {
     unit, setUnit, theme, setTheme, accentColor, setAccentColor, workoutView, setWorkoutView,
     focusSupersetGrouping, setFocusSupersetGrouping,
     focusNotificationEnabled, setFocusNotificationEnabled,
+    plateCalculatorEnabled, setPlateCalculatorEnabled,
+    stretchRoutinesEnabled, setStretchRoutinesEnabled,
   } = useAppState();
 
   // No OS notification tray on web (see focusNotification.web.js), so the
@@ -28,6 +30,10 @@ export function PreferencesScreen({ navigation }) {
       onFocusSupersetGroupingChange={setFocusSupersetGrouping}
       focusNotificationEnabled={focusNotificationEnabled}
       onFocusNotificationToggle={onFocusNotificationToggle}
+      plateCalculatorEnabled={plateCalculatorEnabled}
+      onPlateCalculatorEnabledChange={setPlateCalculatorEnabled}
+      stretchRoutinesEnabled={stretchRoutinesEnabled}
+      onStretchRoutinesEnabledChange={setStretchRoutinesEnabled}
       onClose={() => navigation.goBack()}
     />
   );

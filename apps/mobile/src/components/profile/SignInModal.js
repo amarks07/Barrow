@@ -5,12 +5,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 import { Button } from "../ui/Button";
+import { PasswordInput } from "../ui/PasswordInput";
 
 const TITLES = { signin: "Sign in", signup: "Create account", forgot: "Reset password" };
 
 // Shown instead of the profile screen whenever there's no signed-in
 // session. Same overlay-with-backdrop treatment as AddCustomExerciseModal/
-// TemplateBuilder, just anchored to the top instead of the bottom. Modal's
+// RoutineBuilder, just anchored to the top instead of the bottom. Modal's
 // built-in animationType="slide" always enters from the bottom of the
 // screen regardless of where the content sits, so the panel drives its own
 // slide-down-from-top animation instead.
@@ -20,7 +21,8 @@ export function SignInModal({ cloudSync, onClose }) {
   const [mode, setMode] = useState("signin"); // signin | signup | forgot
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { available, status, error, signIn, signUp, resetPassword } = cloudSync;
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const { available, status, error, signIn, signUp, signInWithGoogle, resetPassword, dismissMessage } = cloudSync;
 
   const slideAnim = useRef(new Animated.Value(-1000)).current;
   useEffect(() => {
@@ -29,20 +31,29 @@ export function SignInModal({ cloudSync, onClose }) {
 
   const busy = status === "authenticating";
   const done = status === "confirm-email" || status === "reset-email-sent";
+  const mismatch = mode === "signup" && confirmPassword.length > 0 && password !== confirmPassword;
+  const canSubmitSignup = mode !== "signup" || (password && password === confirmPassword);
+
+  // Closing on a one-shot message (or a stale error) clears it first, so
+  // reopening the modal later starts fresh instead of re-showing it.
+  const close = () => {
+    if (done || status === "error") dismissMessage();
+    onClose();
+  };
 
   const submit = () => {
     if (!email.trim()) return;
     if (mode === "signin") password && signIn(email.trim(), password);
-    else if (mode === "signup") password && signUp(email.trim(), password);
+    else if (mode === "signup") canSubmitSignup && signUp(email.trim(), password);
     else resetPassword(email.trim());
   };
 
   return (
-    <Modal transparent animationType="none" visible onRequestClose={onClose}>
+    <Modal transparent animationType="none" visible onRequestClose={close}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: "flex-start" }}>
         <Pressable
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)" }}
-          onPress={onClose}
+          onPress={close}
         />
         <Animated.View
           className="p-5"
@@ -72,6 +83,26 @@ export function SignInModal({ cloudSync, onClose }) {
             </Text>
           ) : (
             <>
+              {mode !== "forgot" && (
+                <>
+                  <Button
+                    label={busy ? "…" : "Continue with Google"}
+                    onPress={signInWithGoogle}
+                    disabled={busy}
+                    fullWidth
+                    size="medium"
+                    style={{ marginBottom: 16 }}
+                  />
+                  <View className="flex-row items-center mb-4">
+                    <View style={{ flex: 1, height: 1.5, backgroundColor: tokens.line }} />
+                    <Text style={{ fontSize: 11, color: tokens.textDim }} className="mx-3">
+                      or
+                    </Text>
+                    <View style={{ flex: 1, height: 1.5, backgroundColor: tokens.line }} />
+                  </View>
+                </>
+              )}
+
               <TextInput
                 value={email}
                 onChangeText={setEmail}
@@ -86,17 +117,31 @@ export function SignInModal({ cloudSync, onClose }) {
               />
 
               {mode !== "forgot" && (
-                <TextInput
+                <PasswordInput
                   value={password}
                   onChangeText={setPassword}
-                  secureTextEntry
                   autoComplete={mode === "signin" ? "current-password" : "new-password"}
                   placeholder="Password"
-                  placeholderTextColor={tokens.textDim}
-                  onSubmitEditing={submit}
-                  className="mb-2 py-1.5"
-                  style={{ fontSize: 16, color: tokens.text, borderBottomWidth: 1, borderBottomColor: tokens.lineStrong }}
+                  onSubmitEditing={mode === "signup" ? undefined : submit}
+                  className="mb-2"
                 />
+              )}
+
+              {mode === "signup" && (
+                <PasswordInput
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  autoComplete="new-password"
+                  placeholder="Confirm password"
+                  onSubmitEditing={submit}
+                  className="mb-2"
+                />
+              )}
+
+              {mismatch && (
+                <Text style={{ fontSize: 12, color: tokens.danger }} className="mb-2">
+                  Passwords don't match.
+                </Text>
               )}
 
               {status === "error" && error && (
@@ -107,13 +152,13 @@ export function SignInModal({ cloudSync, onClose }) {
 
               <View className="items-start gap-2 mt-3 mb-4">
                 {mode === "signin" && (
-                  <Pressable onPress={() => setMode("forgot")}>
+                  <Pressable onPress={() => setMode("forgot")} focusable={false}>
                     <Text style={{ fontSize: 12, color: tokens.textDim }}>
                       Forgot your password?
                     </Text>
                   </Pressable>
                 )}
-                <Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}>
+                <Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")} focusable={false}>
                   <Text style={{ fontSize: 12, color: tokens.accent }}>
                     {mode === "signup" ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
                   </Text>
@@ -123,7 +168,7 @@ export function SignInModal({ cloudSync, onClose }) {
           )}
 
           <View className="flex-row items-center justify-between">
-            <Pressable onPress={done ? onClose : mode === "forgot" ? () => setMode("signin") : onClose}>
+            <Pressable onPress={done ? close : mode === "forgot" ? () => setMode("signin") : close} focusable={false}>
               <Text
                 style={{
                   fontFamily: FONT_DISPLAY,
@@ -142,7 +187,7 @@ export function SignInModal({ cloudSync, onClose }) {
               <Button
                 label={busy ? "…" : mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset email"}
                 onPress={submit}
-                disabled={busy}
+                disabled={busy || !canSubmitSignup}
                 variant="solid"
                 size="medium"
               />

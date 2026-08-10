@@ -9,23 +9,32 @@ import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
 import { NoteField } from "../ui/NoteField";
 import { SetCounters } from "./SetCounters";
-import { CardioCounters } from "./CardioCounters";
+import { SingleCounters } from "./SingleCounters";
+import { StretchPanel } from "../stretch/StretchPanel";
 import { AngleToggle } from "./AngleToggle";
+import { WorkoutTimerControl } from "./WorkoutTimerControl";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
+import { BUTTON_HEIGHT } from "../../theme/dimensions";
 
-function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, showName, focusSetId, focusField }) {
+// Height of the bottom Prev/Next bar below (pt-4 padding + medium button +
+// its own bottom padding) — used to float WorkoutTimerControl just above
+// it instead of overlapping, without restructuring that bar itself.
+const NAV_BAR_HEIGHT = 16 + BUTTON_HEIGHT.medium;
+
+function ExercisePanel({ entry, ex, unit, workouts, workoutId, plateCalculatorEnabled, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, showName, focusSetId, focusField }) {
   const { tokens } = useTheme();
-  const isCardio = ex.category === "Cardio";
+  const isStretch = ex.type === "stretch";
+  const isSingle = ex.setFormat === "single";
   const lastSet = entry.sets[entry.sets.length - 1];
   const { repLow, repHigh } = getRepRange(entry.exerciseId, workouts, workoutId);
-  const rec = !isCardio && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workoutId, repLow, repHigh) : null;
+  const rec = !isSingle && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workoutId, repLow, repHigh) : null;
   const prefill = lastSet
     ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
     : rec
     ? { reps: rec.recReps, weight: rec.recWeight }
     : null;
-  const cardioSet = isCardio ? entry.sets[0] : null;
+  const singleSet = isSingle ? entry.sets[0] : null;
 
   return (
     <View className="py-4" style={{ borderBottomWidth: 1.5, borderBottomColor: tokens.line }}>
@@ -60,13 +69,17 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAdd
         </View>
       )}
 
-      {isCardio ? (
-        <CardioCounters
+      {isStretch ? (
+        <StretchPanel ex={ex} />
+      ) : isSingle ? (
+        <SingleCounters
           entry={entry}
+          ex={ex}
           unit={unit}
+          plateCalculatorEnabled={plateCalculatorEnabled}
           onAddSet={onAddSet}
           onUpdateSet={onUpdateSet}
-          autoFocusField={cardioSet && cardioSet.id === focusSetId ? focusField : undefined}
+          autoFocusField={singleSet && singleSet.id === focusSetId ? focusField : undefined}
         />
       ) : (
         <>
@@ -82,6 +95,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAdd
               sets={entry.sets}
               set={set}
               unit={unit}
+              plateCalculatorEnabled={plateCalculatorEnabled}
               onUpdate={(field, value) => onUpdateSet(entry.exerciseId, set.id, field, value)}
               onRemove={() => onRemoveSet(entry.exerciseId, set.id)}
               autoFocusField={set.id === focusSetId ? focusField : undefined}
@@ -116,7 +130,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, onSetAngle, onAdd
 }
 
 export function ExerciseFocusView({
-  dayWorkouts, activeWorkoutId, initialExerciseId, exercises, unit, workouts,
+  dateKey, dayWorkouts, activeWorkoutId, initialExerciseId, exercises, unit, workouts, plateCalculatorEnabled,
   onBack, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote,
   groupSupersets = true,
   onStepChange,
@@ -187,9 +201,14 @@ export function ExerciseFocusView({
           <ArrowLeft size={17} color={tokens.text} />
         </IconBtn>
         <View className="flex-1">
-          <Text style={{ fontSize: 16, fontWeight: "600", color: tokens.text }} numberOfLines={1}>
-            {title || "Exercise"}
-          </Text>
+          <View className="flex-row items-center gap-1.5">
+            <Text style={{ fontSize: 16, fontWeight: "600", color: tokens.text }} numberOfLines={1}>
+              {title || "Exercise"}
+            </Text>
+            {primaryEx?.angles && (
+              <Text style={{ fontSize: 11, color: tokens.accent }}>· {primaryEntry.angle || primaryEx.angles[0]}</Text>
+            )}
+          </View>
           <Text style={{ fontSize: 11, color: tokens.textDim }}>
             {clampedIndex + 1} of {steps.length}
             {activeStep.length > 1 ? " · Superset" : ""}
@@ -224,6 +243,7 @@ export function ExerciseFocusView({
                   unit={unit}
                   workouts={workouts}
                   workoutId={workout.id}
+                  plateCalculatorEnabled={plateCalculatorEnabled}
                   onSetAngle={onSetAngle}
                   onAddSet={onAddSet}
                   onUpdateSet={onUpdateSet}
@@ -259,6 +279,17 @@ export function ExerciseFocusView({
           size="medium"
           trailingIcon={<ChevronRight size={16} color={clampedIndex === steps.length - 1 ? tokens.textDim : "#121214"} />}
         />
+      </View>
+
+      <View
+        style={{
+          position: "absolute",
+          left: 20,
+          bottom: NAV_BAR_HEIGHT + Math.max(16, insets.bottom) + 12,
+          zIndex: 25,
+        }}
+      >
+        <WorkoutTimerControl dateKey={dateKey} workoutId={workout?.id} />
       </View>
     </View>
   );

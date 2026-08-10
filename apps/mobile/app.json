@@ -23,7 +23,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "versionCode": 3
+      "versionCode": 5
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -56,6 +56,29 @@
               "updatePeriodMillis": 1800000
             }
           ]
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Barrow to use Face ID to quickly unlock your account."
+        }
+      ],
+      "expo-audio",
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Barrow to use the camera to scan a shared routine's QR code."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Barrow to access your photos to set a profile picture.",
+          "cameraPermission": "Allow Barrow to use the camera to take a profile picture.",
+          "microphonePermission": false
         }
       ]
     ],

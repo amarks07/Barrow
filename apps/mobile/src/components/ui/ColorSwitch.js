@@ -28,6 +28,11 @@ export function ColorSwitch({ value, options, onChange }) {
             // place, so it's built correctly (rounded) from the start.
             key={`${opt.value}-${active}`}
             onPress={() => onChange(opt.value)}
+            // See Button.js: without this, Android hands the tapped option
+            // native view focus, pulling focus (and the keyboard) off a
+            // focused TextInput elsewhere on screen (e.g. ExercisePicker's
+            // search field).
+            focusable={false}
             accessibilityRole="radio"
             accessibilityState={{ checked: active }}
             style={{

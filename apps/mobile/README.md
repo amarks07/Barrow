@@ -74,7 +74,7 @@ direct APK distribution outside the Play Store, and called out on the download p
 
 ## Feature parity
 
-Business logic (calendar/date math, supersets, templates, workout CRUD, progressive-overload
+Business logic (calendar/date math, supersets, routines, workout CRUD, progressive-overload
 recommendations) lives in `../../packages/core` and is shared byte-for-byte with the retired
 web app — see that package's `src/` for the source of truth. Only presentation and
 platform-specific concerns (storage, cloud-sync deep linking, gestures) are RN-specific, under

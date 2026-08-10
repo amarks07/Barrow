@@ -6,7 +6,7 @@ import { FONT_DISPLAY } from "../theme/fonts";
 // Custom tabBar for the material-top-tabs Tabs navigator (rendered at the
 // bottom via `tabBarPosition: "bottom"` — see TabsNavigator), reproducing
 // the web app's BottomNav look. Automatically absent whenever a Day/
-// History/TemplateDetail/ExerciseFocus screen is pushed on top in the root
+// History/RoutineDetail/ExerciseFocus screen is pushed on top in the root
 // stack, since those cover the whole screen — no extra visibility prop
 // needed the way the web version required.
 export function BottomNavBar({ state, descriptors, navigation }) {

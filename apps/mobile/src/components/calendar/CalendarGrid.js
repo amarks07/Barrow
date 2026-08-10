@@ -64,16 +64,15 @@ export function CalendarGrid({ monthCursor, setMonthCursor, workouts, onSelectDa
               if (!date) return <View key={di} style={{ width: cellSize, height: cellSize }} />;
               const key = toKey(date);
               const dayWorkouts = workouts[key] || [];
-              // One dot per workout that day: accent for a workout with
-              // logged sets, text-color for one that has exercises added
-              // but no sets yet. A workout with no exercises gets no dot.
-              const dots = dayWorkouts
-                .map((w) => {
-                  if (w.entries.some((e) => e.sets.length > 0)) return "done";
-                  if (w.entries.length > 0) return "empty";
-                  return null;
-                })
-                .filter(Boolean);
+              // One dot per workout that day, so the dot count always
+              // matches the workout count: accent for a workout with
+              // logged sets, text-color for one with exercises added but
+              // no sets yet, and dim for one with no exercises at all.
+              const dots = dayWorkouts.map((w) => {
+                if (w.entries.some((e) => e.sets.length > 0)) return "done";
+                if (w.entries.length > 0) return "empty";
+                return "new";
+              });
               const isToday = key === todayKey;
               return (
                 // The whole cell is the tap target now, not just the
@@ -122,7 +121,8 @@ export function CalendarGrid({ monthCursor, setMonthCursor, workouts, onSelectDa
                           width: 4,
                           height: 4,
                           borderRadius: 2,
-                          backgroundColor: status === "done" ? tokens.accent : tokens.text,
+                          backgroundColor:
+                            status === "done" ? tokens.accent : status === "empty" ? tokens.text : tokens.textDim,
                         }}
                       />
                     ))}

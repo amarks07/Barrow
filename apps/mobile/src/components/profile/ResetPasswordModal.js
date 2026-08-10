@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Modal, Text, TextInput, View } from "react-native";
+import { Modal, Text, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 import { Button } from "../ui/Button";
+import { PasswordInput } from "../ui/PasswordInput";
 
 // Shown automatically (regardless of whatever else is on screen) whenever
 // cloudSync.recoveryMode is true — i.e. the person just landed back on the
@@ -33,17 +34,14 @@ export function ResetPasswordModal({ cloudSync }) {
           <Text style={{ fontSize: 12, color: tokens.textDim }} className="mb-4">
             Choose a new password for your account.
           </Text>
-          <TextInput
+          <PasswordInput
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
             autoComplete="new-password"
             placeholder="New password"
-            placeholderTextColor={tokens.textDim}
             autoFocus
             onSubmitEditing={submit}
-            className="mb-2 py-1.5"
-            style={{ fontSize: 16, color: tokens.text, borderBottomWidth: 1, borderBottomColor: tokens.lineStrong }}
+            className="mb-2"
           />
           {status === "error" && error && (
             <Text style={{ fontSize: 12, color: tokens.danger }} className="mt-2 mb-2">

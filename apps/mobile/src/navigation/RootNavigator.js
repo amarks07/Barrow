@@ -11,7 +11,7 @@ const KeyboardAvoidingProfile = withKeyboardAvoiding(ProfileScreen);
 const Stack = createNativeStackNavigator();
 
 // "Main" holds AppHeader plus the nested stack for Tabs/Day/History/
-// TemplateDetail/ExerciseFocus (see MainStack) — AppHeader is always
+// RoutineDetail/ExerciseFocus (see MainStack) — AppHeader is always
 // visible across all of those. Preferences/Profile are a modal group
 // presented over the whole Main stack, matching their always-on-top
 // overlay behavior on web. ResetPasswordModal isn't a route at all: it's

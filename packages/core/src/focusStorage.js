@@ -12,6 +12,7 @@
 // id it was rendered for.
 
 import { buildSteps } from "./focusSteps";
+import { FIELD_KEYS } from "./fieldDefs";
 import { migrateWorkouts } from "./workouts";
 import * as mutations from "./workoutMutations";
 
@@ -141,7 +142,7 @@ export async function focusAddSet(storage, exercises, exerciseId) {
     const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
     if (!entry) return workouts;
     const last = entry.sets[entry.sets.length - 1];
-    const preset = last ? { reps: last.reps, weight: last.weight, time: last.time, speed: last.speed } : undefined;
+    const preset = last ? Object.fromEntries(FIELD_KEYS.map((key) => [key, last[key]])) : undefined;
     return mutations.addSet(workouts, pointer.dateKey, pointer.workoutId, exerciseId, mutations.generateId, preset, unit);
   });
 }

@@ -2,10 +2,24 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Modal, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CATEGORIES } from "@barrow/core";
+import { CATEGORIES, FIELD_DEFS } from "@barrow/core";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
+import { CHIP_HEIGHT } from "../../theme/dimensions";
 import { Button } from "../ui/Button";
+
+const SET_FORMATS = [
+  { value: "sets", label: "Sets" },
+  { value: "single", label: "Single" },
+];
+
+// Defaults for a freshly-picked category — mirrors the built-in seed split
+// (Cardio: minutes+speed, single entry; everything else: weight+reps, a
+// numbered set list). Only used to seed initial state, once, so switching
+// category later never clobbers fields the user already picked.
+function defaultsForCategory(category) {
+  return category === "Cardio" ? { fields: ["time", "speed"], setFormat: "single" } : { fields: ["weight", "reps"], setFormat: "sets" };
+}
 
 export function AddCustomExerciseModal({ onClose, onSave }) {
   const { tokens } = useTheme();
@@ -13,6 +27,13 @@ export function AddCustomExerciseModal({ onClose, onSave }) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [muscle, setMuscle] = useState("");
+  const initialDefaults = useRef(defaultsForCategory(CATEGORIES[0])).current;
+  const [fields, setFields] = useState(initialDefaults.fields);
+  const [setFormat, setSetFormat] = useState(initialDefaults.setFormat);
+
+  const toggleField = (key) => {
+    setFields((cur) => (cur.includes(key) ? cur.filter((f) => f !== key) : [...cur, key]));
+  };
 
   const slideAnim = useRef(new Animated.Value(1000)).current;
   useEffect(() => {
@@ -27,7 +48,7 @@ export function AddCustomExerciseModal({ onClose, onSave }) {
           onPress={onClose}
         />
         <Animated.View
-          className="p-5"
+          className="p-6"
           style={{
             backgroundColor: tokens.bg,
             borderTopWidth: 1.5,
@@ -52,7 +73,7 @@ export function AddCustomExerciseModal({ onClose, onSave }) {
             {CATEGORIES.map((c) => {
               const active = category === c;
               return (
-                <Pressable key={c} onPress={() => setCategory(c)}>
+                <Pressable key={c} onPress={() => setCategory(c)} focusable={false}>
                   <Text
                     style={{
                       fontSize: 13,
@@ -75,12 +96,78 @@ export function AddCustomExerciseModal({ onClose, onSave }) {
             className="mb-6 py-1.5"
             style={{ fontSize: 16, color: tokens.text, borderBottomWidth: 1, borderBottomColor: tokens.lineStrong }}
           />
+          <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 12, textTransform: "uppercase", color: tokens.textDim }} className="mb-2">
+            Format
+          </Text>
+          <View style={{ flexDirection: "row", gap: 8 }} className="mb-6">
+            {SET_FORMATS.map((f) => {
+              const active = setFormat === f.value;
+              return (
+                <Pressable
+                  key={f.value}
+                  onPress={() => setSetFormat(f.value)}
+                  focusable={false}
+                  style={{
+                    height: CHIP_HEIGHT,
+                    paddingHorizontal: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 999,
+                    backgroundColor: active ? tokens.accent : tokens.surface,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: active ? "#121214" : tokens.textDim,
+                    }}
+                  >
+                    {f.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 12, textTransform: "uppercase", color: tokens.textDim }} className="mb-2">
+            Metrics
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }} className="mb-6">
+            {FIELD_DEFS.map((f) => {
+              const active = fields.includes(f.key);
+              return (
+                <Pressable
+                  key={f.key}
+                  onPress={() => toggleField(f.key)}
+                  focusable={false}
+                  style={{
+                    height: CHIP_HEIGHT,
+                    paddingHorizontal: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 999,
+                    backgroundColor: active ? tokens.accent : tokens.surface,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: active ? "#121214" : tokens.textDim,
+                    }}
+                  >
+                    {f.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <View className="flex-row items-center justify-between">
             <Button label="Cancel" onPress={onClose} size="medium" />
             <Button
               label="Save"
-              onPress={() => name.trim() && onSave(name.trim(), category, muscle.trim())}
-              disabled={!name.trim()}
+              onPress={() => name.trim() && fields.length > 0 && onSave(name.trim(), category, muscle.trim(), fields, setFormat)}
+              disabled={!name.trim() || fields.length === 0}
               variant="solid"
               size="medium"
             />

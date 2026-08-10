@@ -79,8 +79,12 @@ export function getVolumeSeries(exerciseId, workouts, unit) {
 
 // Personal-record weight for an exercise, plus the most sets ever done at
 // that weight in a single workout — e.g. "225 lb PR · 3 sets (best)".
-export function getWeightPR(exerciseId, workouts, unit) {
+// `excludeWorkoutId` skips one workout's own entry while scanning — used by
+// getWorkoutStats to check whether a session set a new PR against every
+// *prior* session, not against itself.
+export function getWeightPR(exerciseId, workouts, unit, excludeWorkoutId) {
   const sessions = flattenWorkouts(workouts)
+    .filter(({ workout }) => workout.id !== excludeWorkoutId)
     .map(({ workout }) => workout.entries.find((e) => e.exerciseId === exerciseId))
     .filter((entry) => entry && entry.sets.length > 0);
 
@@ -88,6 +92,8 @@ export function getWeightPR(exerciseId, workouts, unit) {
   sessions.forEach((entry) => {
     entry.sets.forEach((s) => {
       if (s.warmup) return;
+      const reps = parseFloat(s.reps) || 0;
+      if (reps <= 0) return;
       const wConv = convertWeight(s.weight, s.unit, unit);
       const wNum = wConv === "" ? 0 : wConv;
       if (wNum > maxWeight) maxWeight = wNum;
@@ -99,6 +105,8 @@ export function getWeightPR(exerciseId, workouts, unit) {
   sessions.forEach((entry) => {
     const count = entry.sets.filter((s) => {
       if (s.warmup) return false;
+      const reps = parseFloat(s.reps) || 0;
+      if (reps <= 0) return false;
       const wConv = convertWeight(s.weight, s.unit, unit);
       return (wConv === "" ? 0 : wConv) === maxWeight;
     }).length;
@@ -129,4 +137,83 @@ export function getCardioDistanceSeries(exerciseId, workouts, unit) {
   const rows = Array.from(byDate, ([dateKey, volume]) => ({ dateKey, volume }));
   rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
   return rows.slice(-10);
+}
+
+// Everything the workout summary screen renders — one pure calculation over
+// a single workout (plus the full `workouts` history, needed to tell
+// whether a set logged this session is a new PR) so the view component
+// stays pure presentation.
+export function getWorkoutStats(workout, workouts, exercises, unit) {
+  const exMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
+  const entries = (workout?.entries || []).filter((e) => exMap[e.exerciseId]);
+
+  let totalVolume = 0;
+  let totalSets = 0;
+  let totalReps = 0;
+  let warmupSets = 0;
+  let rpeSum = 0;
+  let rpeCount = 0;
+  const categoryCounts = {};
+  const exerciseVolumes = [];
+  const prs = [];
+
+  entries.forEach((entry) => {
+    const ex = exMap[entry.exerciseId];
+    const isStretch = ex.type === "stretch";
+    const setCount = isStretch ? ex.stretches?.length || 0 : entry.sets.length;
+    if (ex.category) categoryCounts[ex.category] = (categoryCounts[ex.category] || 0) + (setCount || 1);
+    if (isStretch) return;
+
+    let exVolume = 0;
+    let bestWeight = 0;
+    let bestReps = 0;
+    entry.sets.forEach((s) => {
+      totalSets += 1;
+      if (s.warmup) {
+        warmupSets += 1;
+        return;
+      }
+      const reps = parseFloat(s.reps) || 0;
+      const wConv = convertWeight(s.weight, s.unit, unit);
+      const wNum = wConv === "" ? 0 : wConv;
+      totalReps += reps;
+      exVolume += wNum * reps;
+      if (wNum > 0 && reps > 0 && (wNum > bestWeight || (wNum === bestWeight && reps > bestReps))) {
+        bestWeight = wNum;
+        bestReps = reps;
+      }
+      const rpe = parseFloat(s.rpe);
+      if (!Number.isNaN(rpe)) {
+        rpeSum += rpe;
+        rpeCount += 1;
+      }
+    });
+    totalVolume += exVolume;
+    if (exVolume > 0) exerciseVolumes.push({ exerciseId: ex.id, name: ex.name, volume: exVolume });
+
+    if (bestWeight > 0) {
+      const priorPR = getWeightPR(ex.id, workouts, unit, workout.id);
+      if (!priorPR || bestWeight > priorPR.weight) {
+        prs.push({ exerciseId: ex.id, name: ex.name, weight: bestWeight, reps: bestReps, priorWeight: priorPR?.weight ?? null });
+      }
+    }
+  });
+
+  exerciseVolumes.sort((a, b) => b.volume - a.volume);
+  const categoryBreakdown = Object.entries(categoryCounts)
+    .map(([category, sets]) => ({ category, sets }))
+    .sort((a, b) => b.sets - a.sets);
+
+  return {
+    exerciseCount: entries.length,
+    totalVolume,
+    totalSets,
+    totalReps,
+    warmupSets,
+    avgRpe: rpeCount > 0 ? rpeSum / rpeCount : null,
+    durationMs: workout?.startedAt && workout?.endedAt ? Math.max(0, workout.endedAt - workout.startedAt) : null,
+    exerciseVolumes,
+    categoryBreakdown,
+    prs,
+  };
 }

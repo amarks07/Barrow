@@ -9,6 +9,11 @@ export const dayLabel = (key) => {
   return new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 };
 
+export const addDays = (key, delta) => {
+  const [y, m, d] = key.split("-").map(Number);
+  return toKey(new Date(y, m - 1, d + delta));
+};
+
 export const shortDayLabel = (key) => {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

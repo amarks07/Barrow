@@ -1,7 +1,7 @@
 // Shared logic for grouping exercises into supersets — used by both the
 // workout entries list (grouped via a per-entry `supersetId`) and the
-// template builder's picked-exercise list (grouped via `supersets: id[][]`,
-// since template entries are plain exercise ids with no per-item object to
+// routine builder's picked-exercise list (grouped via `supersets: id[][]`,
+// since routine entries are plain exercise ids with no per-item object to
 // tag). Both representations reorder and render the same way, so that logic
 // lives here once.
 
@@ -31,14 +31,14 @@ export function runInfo(items, getGroupKey) {
   });
 }
 
-// Index of the group (if any) an id belongs to, for the template-builder's
+// Index of the group (if any) an id belongs to, for the routine-builder's
 // id-array-of-arrays representation.
 export function groupIndexOf(groups, id) {
   return groups.findIndex((g) => g.includes(id));
 }
 
 // Drops ids no longer present and discards any group that's shrunk below 2
-// members — for the template-builder's id-array-of-arrays representation.
+// members — for the routine-builder's id-array-of-arrays representation.
 export function pruneGroups(groups, keepIds) {
   const keepSet = new Set(keepIds);
   return groups.map((g) => g.filter((id) => keepSet.has(id))).filter((g) => g.length >= 2);

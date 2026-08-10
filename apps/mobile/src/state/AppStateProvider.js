@@ -3,7 +3,7 @@ import { AppState } from "react-native";
 import {
   usePersistedState,
   useDayWorkouts,
-  useTemplateActions,
+  useRoutineActions,
   useExerciseActions,
   SEED_EXERCISES,
   reconcileExercises,
@@ -33,19 +33,24 @@ const DEFAULT_PROFILE = {
   username: "",
   email: "",
   pictureUrl: "",
+  birthday: "",
+  gender: "",
+  height: "",
+  weight: "",
+  premium: false,
   profileId: `usr-${Math.random().toString(36).slice(2, 10)}`,
 };
 
 // Owns every persisted slice of app state (AsyncStorage-backed, via
 // @barrow/core's usePersistedState) plus the selection-independent action
-// hooks (dayWorkoutsActions/templateActions/exerciseActions). Deliberately
+// hooks (dayWorkoutsActions/routineActions/exerciseActions). Deliberately
 // does NOT instantiate useWorkoutActions — that hook needs a selected
 // date/workout, which on mobile lives in a screen's route params rather
 // than global state, so Day/ExerciseFocus screens (Phase 3) build it
 // themselves from useAppState() + their own route.params.
 export function AppStateProvider({ children }) {
   const [exercises, setExercises] = usePersistedState("barrow:exercises", SEED_EXERCISES, EXERCISES_CODEC);
-  const [templates, setTemplates] = usePersistedState("barrow:templates", [], JSON_CODEC);
+  const [routines, setRoutines] = usePersistedState("barrow:routines", [], { ...JSON_CODEC, legacyKey: "barrow:templates" });
   const [workouts, setWorkouts] = usePersistedState("barrow:workouts", {}, WORKOUTS_CODEC);
   const [unit, setUnit] = usePersistedState("barrow:unit", "lb", RAW_CODEC);
   const [theme, setTheme] = usePersistedState("barrow:theme", "system", RAW_CODEC);
@@ -56,12 +61,49 @@ export function AppStateProvider({ children }) {
     "together",
     RAW_CODEC
   );
-  const [profile, setProfile] = usePersistedState("barrow:profile", DEFAULT_PROFILE, JSON_CODEC);
+  const [profile, setProfile, profileHydrated] = usePersistedState("barrow:profile", DEFAULT_PROFILE, JSON_CODEC);
   const updateProfile = (field, value) => setProfile((p) => ({ ...p, [field]: value }));
   const [focusNotificationEnabled, setFocusNotificationEnabled] = usePersistedState(
     "barrow:focusNotificationEnabled",
     "off",
     RAW_CODEC
+  );
+  const [plateCalculatorEnabled, setPlateCalculatorEnabled] = usePersistedState(
+    "barrow:plateCalculatorEnabled",
+    false,
+    JSON_CODEC
+  );
+  const [stretchRoutinesEnabled, setStretchRoutinesEnabled] = usePersistedState(
+    "barrow:stretchRoutinesEnabled",
+    false,
+    JSON_CODEC
+  );
+  // Whether the Start/End workout timer control is turned on at all — the
+  // preference itself, distinct from whether a timer is currently running
+  // (see workoutTimerStartedAt below).
+  const [workoutTimerEnabled, setWorkoutTimerEnabled] = usePersistedState(
+    "barrow:workoutTimerEnabled",
+    false,
+    JSON_CODEC
+  );
+  // Sub-option of the timer above: whether ending the timer also jumps
+  // straight to that workout's summary. Defaults on to match the timer's
+  // original (non-optional) behavior before this toggle existed.
+  const [workoutTimerAutoOpenSummary, setWorkoutTimerAutoOpenSummary] = usePersistedState(
+    "barrow:workoutTimerAutoOpenSummary",
+    true,
+    JSON_CODEC
+  );
+  // Timestamp (ms) the in-progress workout timer was started, or null when
+  // no timer is running — persisted (rather than plain useState) so a
+  // timer started before the app was killed/backgrounded is still running,
+  // with its correct elapsed time, on relaunch. Set/cleared directly by
+  // WorkoutTimerControl's Start/End actions in Day and Focus view, not by
+  // the preference toggle above.
+  const [workoutTimerStartedAt, setWorkoutTimerStartedAt] = usePersistedState(
+    "barrow:workoutTimerStartedAt",
+    null,
+    JSON_CODEC
   );
 
   const nextId = generateId;
@@ -132,11 +174,11 @@ export function AppStateProvider({ children }) {
   }, [focusNotificationEnabled]);
 
   const dayWorkoutsActions = useDayWorkouts({ setWorkouts, nextId });
-  // Deleting the template currently open in TemplateDetailScreen is handled
+  // Deleting the routine currently open in RoutineDetailScreen is handled
   // by that screen calling navigation.goBack() itself (Phase 3F) rather
-  // than this hook managing a global "selected template" — so the web
-  // hook's setSelectedTemplateId callback is a no-op here.
-  const templateActions = useTemplateActions({ setTemplates, setWorkouts, setSelectedTemplateId: () => {}, workouts });
+  // than this hook managing a global "selected routine" — so the web
+  // hook's setSelectedRoutineId callback is a no-op here.
+  const routineActions = useRoutineActions({ setRoutines, setWorkouts, setSelectedRoutineId: () => {}, workouts });
   const exerciseActions = useExerciseActions({ setExercises });
 
   // Resumes a date's most recently added workout, or starts a fresh one —
@@ -151,17 +193,31 @@ export function AppStateProvider({ children }) {
   const cloudSync = useCloudSync({
     profile, setProfile,
     exercises, setExercises,
-    templates, setTemplates,
+    routines, setRoutines,
     workouts, setWorkouts,
     unit, setUnit,
   });
+
+  // Wipes every logged workout on this device (Profile's "Danger zone" —
+  // ConfirmActionModal gates the call). Exercises/routines are left
+  // untouched since they're reusable definitions, not history — only
+  // `workouts` is what someone means by "workout data" here. Also clears
+  // the in-progress workout timer, since it's meaningless once the workout
+  // it was tracking is gone; the debounced push effect above picks up the
+  // `workouts` change and re-syncs the (now-empty) history to the cloud
+  // like any other edit, so this doesn't touch cloud backup on its own —
+  // clearBackupData in useCloudSync does that.
+  const clearWorkoutData = () => {
+    setWorkouts({});
+    setWorkoutTimerStartedAt(null);
+  };
 
   const value = useMemo(
     () => ({
       exercises,
       setExercises,
-      templates,
-      setTemplates,
+      routines,
+      setRoutines,
       workouts,
       setWorkouts,
       unit,
@@ -176,17 +232,29 @@ export function AppStateProvider({ children }) {
       setFocusSupersetGrouping,
       focusNotificationEnabled,
       setFocusNotificationEnabled,
+      plateCalculatorEnabled,
+      setPlateCalculatorEnabled,
+      stretchRoutinesEnabled,
+      setStretchRoutinesEnabled,
+      workoutTimerEnabled,
+      setWorkoutTimerEnabled,
+      workoutTimerAutoOpenSummary,
+      setWorkoutTimerAutoOpenSummary,
+      workoutTimerStartedAt,
+      setWorkoutTimerStartedAt,
       profile,
       updateProfile,
+      profileHydrated,
       nextId,
       dayWorkoutsActions,
-      templateActions,
+      routineActions,
       exerciseActions,
       getOrCreateWorkoutForDate,
+      clearWorkoutData,
       cloudSync,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [exercises, templates, workouts, unit, theme, accentColor, workoutView, focusSupersetGrouping, focusNotificationEnabled, profile, cloudSync]
+    [exercises, routines, workouts, unit, theme, accentColor, workoutView, focusSupersetGrouping, focusNotificationEnabled, plateCalculatorEnabled, stretchRoutinesEnabled, workoutTimerEnabled, workoutTimerAutoOpenSummary, workoutTimerStartedAt, profile, profileHydrated, cloudSync]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

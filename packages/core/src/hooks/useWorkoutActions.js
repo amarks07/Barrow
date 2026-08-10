@@ -1,10 +1,10 @@
 import { clearSingletonGroups, groupContiguous } from "../supersets";
 import { setAngle, addSet, updateSet, removeSet, setEntryNote } from "../workoutMutations";
 
-// Mutations for one already-selected workout: renaming it, adding/removing/
-// swapping exercises, editing sets, and pulling a template's exercise list
-// into it. Creating/deleting whole workouts for a day lives in useDayWorkouts.
-export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts, templates, exercises, unit, nextId }) {
+// Mutations for one already-selected workout: adding/removing/swapping
+// exercises, editing sets, and pulling a routine's exercise list into it.
+// Creating/deleting whole workouts for a day lives in useDayWorkouts.
+export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts, routines, exercises, unit, nextId }) {
   const ensureWorkout = (updater) => {
     setWorkouts((prev) => {
       const dayWorkouts = prev[selectedDate] || [];
@@ -24,8 +24,6 @@ export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts
   };
 
   return {
-    onRename: (name) => ensureWorkout((w) => ({ ...w, name })),
-
     onSetNote: (note) => ensureWorkout((w) => ({ ...w, note })),
 
     onAddExercise: (exId) =>
@@ -82,7 +80,7 @@ export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts
         entries: w.entries.map((e) => (e.supersetId === supersetId ? { ...e, supersetId: undefined } : e)),
       })),
 
-    // Swaps one exercise for another on this workout only — the template
+    // Swaps one exercise for another on this workout only — the routine
     // (and any other workout that used it) is untouched. New exercise
     // starts fresh, but keeps its predecessor's spot in any superset.
     onSwapExercise: (oldExId, newExId) =>
@@ -116,18 +114,18 @@ export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts
     onSetEntryNote: (exId, note) =>
       setWorkouts((prev) => setEntryNote(prev, selectedDate, selectedWorkoutId, exId, note)),
 
-    onApplyTemplate: (tplId) => {
-      const tpl = templates.find((t) => t.id === tplId);
-      if (!tpl) return;
+    onApplyRoutine: (routineId) => {
+      const routine = routines.find((r) => r.id === routineId);
+      if (!routine) return;
       ensureWorkout((w) => {
         const existingIds = new Set(w.entries.map((e) => e.exerciseId));
-        const newIds = tpl.exerciseIds.filter((id) => !existingIds.has(id));
+        const newIds = routine.exerciseIds.filter((id) => !existingIds.has(id));
         const newEntries = newIds.map(makeEntry);
-        // Carry the template's superset groupings over to the entries that
+        // Carry the routine's superset groupings over to the entries that
         // actually made it in (a group could be partially skipped if some of
         // its exercises were already in the workout).
         const newIdSet = new Set(newIds);
-        (tpl.supersets || []).forEach((group) => {
+        (routine.supersets || []).forEach((group) => {
           const present = group.filter((id) => newIdSet.has(id));
           if (present.length < 2) return;
           const groupSet = new Set(present);
@@ -136,8 +134,8 @@ export function useWorkoutActions({ selectedDate, selectedWorkoutId, setWorkouts
             if (groupSet.has(e.exerciseId)) newEntries[i] = { ...e, supersetId };
           });
         });
-        const templateIds = (w.templateIds || []).includes(tplId) ? w.templateIds : [...(w.templateIds || []), tplId];
-        return { ...w, entries: [...w.entries, ...newEntries], templateIds };
+        const routineIds = (w.routineIds || []).includes(routineId) ? w.routineIds : [...(w.routineIds || []), routineId];
+        return { ...w, entries: [...w.entries, ...newEntries], routineIds };
       });
     },
   };

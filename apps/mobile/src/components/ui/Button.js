@@ -4,7 +4,7 @@ import { BUTTON_FONT_SIZE, BUTTON_HEIGHT, BUTTON_PADDING_H } from "../../theme/d
 import { FONT_DISPLAY } from "../../theme/fonts";
 
 // Standard action button, used for everything from "History"/"Swap"/"Save
-// as template" up through modal "Cancel"/"Save" buttons and the app's
+// as routine" up through modal "Cancel"/"Save" buttons and the app's
 // prominent CTAs. Three sizes: `small` (the default — matches what the Day
 // view's action row already looked like), `medium` (a modal/screen's one
 // primary action alongside other controls), and `large` (reserved for a
@@ -17,7 +17,7 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 //   "solid"         — accent background, dark label, thicker border (Save,
 //                      Start a workout — the affirmative/primary case)
 //   "accentOutline" — same shape as outline, but an accent-colored label
-//                      (+ Add exercise in template detail)
+//                      (+ Add exercise in routine detail)
 export function Button({
   label,
   onPress,
@@ -49,10 +49,16 @@ export function Button({
       key={`${variant}-${disabled}`}
       onPress={onPress}
       disabled={disabled}
+      // Android hands a Pressable native view focus on tap by default, which
+      // pulls focus (and the keyboard) off whatever TextInput was focused
+      // beside it — e.g. a modal's Cancel/Save next to a still-typing field.
+      // See WeightToolbar's tool chip for where this was first diagnosed.
+      focusable={false}
       style={[
         {
-          height: BUTTON_HEIGHT[size],
+          minHeight: BUTTON_HEIGHT[size],
           paddingHorizontal: BUTTON_PADDING_H[size],
+          paddingVertical: 4,
           borderRadius: 999,
           borderWidth: variant === "solid" ? 2 : 1.5,
           borderColor: variant === "solid" ? "rgba(0,0,0,0.3)" : tokens.lineStrong,

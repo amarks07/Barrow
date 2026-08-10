@@ -11,6 +11,13 @@
 // behavior (the day/workout/set may have been deleted from another
 // context since the caller last read it).
 
+import { FIELD_KEYS } from "./fieldDefs";
+
+// Fields whose values are unit-bearing (stored alongside a snapshot of the
+// unit system they were entered in — see `updateSet` below) rather than
+// unit-agnostic counts.
+const UNIT_BEARING_FIELDS = new Set(["weight", "speed", "distance"]);
+
 function updateWorkout(workouts, dateKey, workoutId, updater) {
   const dayWorkouts = workouts[dateKey] || [];
   const idx = dayWorkouts.findIndex((w) => w.id === workoutId);
@@ -49,12 +56,10 @@ export function addSet(workouts, dateKey, workoutId, exerciseId, nextId, preset,
               ...e.sets,
               {
                 id: nextId(),
-                reps: preset?.reps ?? "",
-                weight: preset?.weight ?? "",
-                time: preset?.time ?? "",
-                speed: preset?.speed ?? "",
+                ...Object.fromEntries(FIELD_KEYS.map((key) => [key, preset?.[key] ?? ""])),
                 unit,
                 warmup: false,
+                side: preset?.side ?? "both",
               },
             ],
           }
@@ -72,7 +77,7 @@ export function updateSet(workouts, dateKey, workoutId, exerciseId, setId, field
             ...e,
             sets: e.sets.map((s) =>
               s.id === setId
-                ? field === "weight" || field === "speed"
+                ? UNIT_BEARING_FIELDS.has(field)
                   ? { ...s, [field]: value, unit }
                   : { ...s, [field]: value }
                 : s
@@ -88,6 +93,13 @@ export function removeSet(workouts, dateKey, workoutId, exerciseId, setId) {
     ...w,
     entries: w.entries.map((e) => (e.exerciseId === exerciseId ? { ...e, sets: e.sets.filter((s) => s.id !== setId) } : e)),
   }));
+}
+
+// Shallow-merges arbitrary fields onto a workout — used to stamp
+// startedAt/endedAt from the workout timer, which (unlike the mutations
+// above) isn't scoped to one entry/set.
+export function patchWorkout(workouts, dateKey, workoutId, patch) {
+  return updateWorkout(workouts, dateKey, workoutId, (w) => ({ ...w, ...patch }));
 }
 
 export function setEntryNote(workouts, dateKey, workoutId, exerciseId, note) {

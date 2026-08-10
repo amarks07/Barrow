@@ -16,6 +16,10 @@ export function IconBtn({ onPress, children, label }) {
       onPressOut={() => setPressed(false)}
       accessibilityLabel={label}
       hitSlop={8}
+      // See Button.js: Android otherwise hands this Pressable native view
+      // focus on tap, pulling focus (and the keyboard) off a focused
+      // TextInput elsewhere in the same modal.
+      focusable={false}
       style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.4 : 1 }}
     >
       {children}

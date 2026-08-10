@@ -15,7 +15,7 @@ export function WorkoutTabs({ workouts, activeId, onSelect, onCreate }) {
       style={{ flexGrow: 0, paddingTop: 12, paddingBottom: 12 }}
       contentContainerStyle={{ gap: 8, alignItems: "center", paddingHorizontal: 20 }}
     >
-      {workouts.map((w) => {
+      {workouts.map((w, i) => {
         const active = w.id === activeId;
         return (
           <Pressable
@@ -52,7 +52,7 @@ export function WorkoutTabs({ workouts, activeId, onSelect, onCreate }) {
                 color: active ? "#121214" : tokens.textDim,
               }}
             >
-              {w.name || "Workout"}
+              {`Workout ${i + 1}`}
             </Text>
           </Pressable>
         );

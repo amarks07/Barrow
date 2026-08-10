@@ -5,9 +5,14 @@ import { ArrowLeft, Check, ChevronRight } from "lucide-react-native";
 import { IconBtn } from "../ui/IconBtn";
 import { Card } from "../ui/Card";
 import { ColorSwitch } from "../ui/ColorSwitch";
+import { Switch } from "../ui/Switch";
+import { MenuRow } from "../ui/MenuRow";
+import { PatchNotesView } from "../patchnotes/PatchNotesView";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 import { ACCENT_PALETTE } from "../../theme/accentPalette";
+import { usePulse } from "../../hooks/usePulse";
+import { CURRENT_VERSION, PATCH_NOTES } from "../../content/patchNotes";
 
 const SWATCH_SIZE = 34;
 const SWATCH_GAP = 12;
@@ -109,10 +114,26 @@ export function PreferencesView({
   workoutView, onWorkoutViewChange,
   focusSupersetGrouping, onFocusSupersetGroupingChange,
   focusNotificationEnabled, onFocusNotificationToggle,
+  plateCalculatorEnabled, onPlateCalculatorEnabledChange,
+  stretchRoutinesEnabled, onStretchRoutinesEnabledChange,
+  workoutTimerEnabled, onWorkoutTimerEnabledChange,
+  workoutTimerAutoOpenSummary, onWorkoutTimerAutoOpenSummaryChange,
+  signedIn, biometricEnabled, onEnableBiometric, onDisableBiometric,
   onClose,
 }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+
+  const [showPatchNotes, setShowPatchNotes] = useState(false);
+  const [biometricPulse, triggerBiometricPulse] = usePulse();
+  const [plateCalculatorPulse, triggerPlateCalculatorPulse] = usePulse();
+  const [stretchRoutinesPulse, triggerStretchRoutinesPulse] = usePulse();
+  const [workoutTimerPulse, triggerWorkoutTimerPulse] = usePulse();
+  const [focusNotificationPulse, triggerFocusNotificationPulse] = usePulse();
+
+  if (showPatchNotes) {
+    return <PatchNotesView onBack={() => setShowPatchNotes(false)} />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.bg, paddingTop: insets.top }}>
@@ -208,42 +229,174 @@ export function PreferencesView({
           </View>
         </View>
 
-        {Platform.OS !== "web" && (
+        {/* No Face ID/fingerprint API on web, and nothing to unlock if
+            there's no account signed in yet. */}
+        {Platform.OS !== "web" && signedIn && (
           <View className="mb-7">
             <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 13, textTransform: "uppercase", color: tokens.textDim }} className="mb-2">
-              Home &amp; lock screen
+              Account security
             </Text>
-            <Text style={{ fontSize: 11, color: tokens.textDim, lineHeight: 16 }} className="mb-3">
-              Add the Barrow widget to your home screen to see and edit the workout open in Focus flow — navigate exercises,
-              adjust reps/weight, and add or remove sets right from the widget.
-            </Text>
-            <Card selected={focusNotificationEnabled === "on"} style={{ padding: 12 }}>
+            <Card style={{ padding: 12 }} pulse={biometricPulse}>
               <Pressable
-                onPress={() => onFocusNotificationToggle(focusNotificationEnabled === "on" ? "off" : "on")}
-                className="flex-row items-start gap-3"
+                onPress={() => {
+                  triggerBiometricPulse();
+                  if (biometricEnabled) onDisableBiometric();
+                  else onEnableBiometric();
+                }}
+                className="flex-row items-center gap-3"
               >
-                <View
-                  className="items-center justify-center rounded-full"
-                  style={{
-                    width: 18,
-                    height: 18,
-                    marginTop: 1,
-                    backgroundColor: focusNotificationEnabled === "on" ? tokens.accent : "transparent",
-                    borderWidth: 1.5,
-                    borderColor: focusNotificationEnabled === "on" ? tokens.accent : tokens.lineStrong,
-                  }}
-                >
-                  {focusNotificationEnabled === "on" && <Check size={12} color="#121214" />}
-                </View>
                 <View className="flex-1">
-                  <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>Show workout notification</Text>
+                  <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>Face ID / fingerprint unlock</Text>
                   <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2, lineHeight: 16 }}>
-                    Shows your current workout in a notification so you can glance at it without opening the app. If it
-                    doesn't appear, allow notifications for Barrow in your device settings.
+                    Require biometric confirmation to open your profile.
                   </Text>
                 </View>
+                <Switch
+                  value={biometricEnabled}
+                  onChange={(next) => {
+                    triggerBiometricPulse();
+                    if (next) onEnableBiometric();
+                    else onDisableBiometric();
+                  }}
+                />
               </Pressable>
             </Card>
+          </View>
+        )}
+
+        <View className="mb-7">
+          <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 13, textTransform: "uppercase", color: tokens.textDim }} className="mb-2">
+            Features
+          </Text>
+          <View style={{ gap: 8 }}>
+            <Card style={{ padding: 12 }} pulse={plateCalculatorPulse}>
+              <Pressable
+                onPress={() => {
+                  triggerPlateCalculatorPulse();
+                  onPlateCalculatorEnabledChange(!plateCalculatorEnabled);
+                }}
+                className="flex-row items-center gap-3"
+              >
+                <View className="flex-1">
+                  <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>Plate calculator</Text>
+                  <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2, lineHeight: 16 }}>
+                    Show a bar-loading breakdown — plates per side for the weight you're entering — below the weight editor.
+                  </Text>
+                </View>
+                <Switch
+                  value={plateCalculatorEnabled}
+                  onChange={(next) => {
+                    triggerPlateCalculatorPulse();
+                    onPlateCalculatorEnabledChange(next);
+                  }}
+                />
+              </Pressable>
+            </Card>
+
+            <Card style={{ padding: 12 }} pulse={stretchRoutinesPulse}>
+              <Pressable
+                onPress={() => {
+                  triggerStretchRoutinesPulse();
+                  onStretchRoutinesEnabledChange(!stretchRoutinesEnabled);
+                }}
+                className="flex-row items-center gap-3"
+              >
+                <View className="flex-1">
+                  <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>Enable stretch routines</Text>
+                  <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2, lineHeight: 16 }}>
+                    Adds a Stretches tab where you can build a named list of poses, each with its own hold time, then add it to
+                    the end of a routine or workout like any other exercise.
+                  </Text>
+                </View>
+                <Switch
+                  value={stretchRoutinesEnabled}
+                  onChange={(next) => {
+                    triggerStretchRoutinesPulse();
+                    onStretchRoutinesEnabledChange(next);
+                  }}
+                />
+              </Pressable>
+            </Card>
+
+            <Card style={{ padding: 12 }} pulse={workoutTimerPulse}>
+              <Pressable
+                onPress={() => {
+                  triggerWorkoutTimerPulse();
+                  onWorkoutTimerEnabledChange(!workoutTimerEnabled);
+                }}
+                className="flex-row items-center gap-3"
+              >
+                <View className="flex-1">
+                  <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>Workout timer</Text>
+                  <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2, lineHeight: 16 }}>
+                    Adds a Start workout button to Day and Focus view. Once started, a running timer and End workout
+                    button stay in the corner until you end it.
+                  </Text>
+                </View>
+                <Switch
+                  value={workoutTimerEnabled}
+                  onChange={(next) => {
+                    triggerWorkoutTimerPulse();
+                    onWorkoutTimerEnabledChange(next);
+                  }}
+                />
+              </Pressable>
+
+              {workoutTimerEnabled && (
+                <View className="mt-3 pt-3" style={{ borderTopWidth: 1.5, borderTopColor: tokens.line, paddingLeft: 30 }}>
+                  <Pressable
+                    onPress={() => onWorkoutTimerAutoOpenSummaryChange(!workoutTimerAutoOpenSummary)}
+                    className="flex-row items-center gap-3"
+                  >
+                    <View className="flex-1">
+                      <Text style={{ fontSize: 13, fontWeight: "500", color: tokens.text }}>Open summary on end</Text>
+                      <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2, lineHeight: 16 }}>
+                        Jump straight to the workout summary when you end the timer.
+                      </Text>
+                    </View>
+                    <Switch value={workoutTimerAutoOpenSummary} onChange={onWorkoutTimerAutoOpenSummaryChange} />
+                  </Pressable>
+                </View>
+              )}
+            </Card>
+
+            {Platform.OS !== "web" && (
+              <Card style={{ padding: 12 }} pulse={focusNotificationPulse}>
+                <Pressable
+                  onPress={() => {
+                    triggerFocusNotificationPulse();
+                    onFocusNotificationToggle(focusNotificationEnabled === "on" ? "off" : "on");
+                  }}
+                  className="flex-row items-center gap-3"
+                >
+                  <View className="flex-1">
+                    <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>Show workout notification</Text>
+                    <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2, lineHeight: 16 }}>
+                      Shows a persistent notification with the workout open in Focus flow — navigate exercises,
+                      adjust reps/weight, and add or remove sets right from it. If it doesn't appear, allow
+                      notifications for Barrow in your device settings. The Barrow home screen widget is
+                      available separately, any time you add it, regardless of this setting.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={focusNotificationEnabled === "on"}
+                    onChange={(next) => {
+                      triggerFocusNotificationPulse();
+                      onFocusNotificationToggle(next ? "on" : "off");
+                    }}
+                  />
+                </Pressable>
+              </Card>
+            )}
+          </View>
+        </View>
+
+        {PATCH_NOTES.length > 0 && (
+          <View className="mb-7">
+            <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 13, textTransform: "uppercase", color: tokens.textDim }} className="mb-2">
+              About
+            </Text>
+            <MenuRow label="Patch notes" subtitle={`Version ${CURRENT_VERSION}`} onPress={() => setShowPatchNotes(true)} />
           </View>
         )}
       </ScrollView>

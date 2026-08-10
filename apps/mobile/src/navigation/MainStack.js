@@ -1,13 +1,12 @@
-import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AppHeader } from "../components/layout/AppHeader";
-import { SignInModal } from "../components/profile/SignInModal";
 import { TabsNavigator } from "./TabsNavigator";
 import { DayScreen } from "../screens/workout/DayScreen";
 import { ExerciseFocusScreen } from "../screens/workout/ExerciseFocusScreen";
+import { WorkoutSummaryScreen } from "../screens/workout/WorkoutSummaryScreen";
 import { HistoryScreen } from "../screens/history/HistoryScreen";
-import { TemplateDetailScreen } from "../screens/templates/TemplateDetailScreen";
+import { RoutineDetailScreen } from "../screens/routines/RoutineDetailScreen";
 import { withKeyboardAvoiding } from "./withKeyboardAvoiding";
 import { useAppState } from "../state/AppStateProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -15,44 +14,33 @@ import { useTheme } from "../theme/ThemeProvider";
 const Stack = createNativeStackNavigator();
 const KeyboardAvoidingDay = withKeyboardAvoiding(DayScreen);
 const KeyboardAvoidingHistory = withKeyboardAvoiding(HistoryScreen);
-const KeyboardAvoidingTemplateDetail = withKeyboardAvoiding(TemplateDetailScreen);
+const KeyboardAvoidingRoutineDetail = withKeyboardAvoiding(RoutineDetailScreen);
 
 // AppHeader renders once here, above a nested stack, so it stays visible
 // across every screen in that stack — tabs and drill-downs alike — instead
-// of disappearing when you push into Day/History/TemplateDetail/
+// of disappearing when you push into Day/History/RoutineDetail/
 // ExerciseFocus. Each of those screens keeps its own back-button-and-title
 // row directly below it; this is the persistent app-level bar above that.
 // Preferences/Profile live one level up (see RootNavigator) as modals over
 // this whole stack, so opening them doesn't show this header a second time.
 //
-// Tapping the profile icon while signed out shows SignInModal as a local
-// overlay (like the "New exercise"/"New template" popups) rather than
-// navigating to the "Profile" route — routing there and then rendering
-// SignInModal inside it stacked two separate modal transitions on top of
-// each other, which was the white-flash "looks like a new page" bug.
+// Tapping the profile icon always navigates straight to the "Profile"
+// route, signed in or not and with no authentication prompt of any kind —
+// ProfileView (via CloudBackupSection) handles the signed-out case by
+// showing a "Sign in" CTA instead of sync status, and the mandatory
+// cloud-sync re-auth gate (see useCloudSync's syncLocked) only ever
+// triggers from the explicit "Unlock to sync" button inside that screen,
+// never from opening it.
 export function MainStack({ navigation }) {
   const { profile, cloudSync } = useAppState();
   const { tokens } = useTheme();
-  const [showSignIn, setShowSignIn] = useState(false);
-
-  // A successful sign-in used to swap SignInModal for ProfileView in place
-  // (same route, condition just re-evaluated). Now that the modal is a
-  // separate overlay, it has to close itself once there's a real session —
-  // then hand off to the Profile route so signing in still ends with the
-  // profile screen open, same as before.
-  useEffect(() => {
-    if (cloudSync.session && showSignIn) {
-      setShowSignIn(false);
-      navigation.navigate("Profile");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cloudSync.session]);
 
   return (
     <View style={{ flex: 1 }}>
       <AppHeader
         profile={profile}
-        onOpenProfile={() => (cloudSync.session ? navigation.navigate("Profile") : setShowSignIn(true))}
+        signedIn={!!cloudSync.session}
+        onOpenProfile={() => navigation.navigate("Profile")}
         onOpenPreferences={() => navigation.navigate("Preferences")}
       />
       {/* detachInactiveScreens=false: by default react-native-screens
@@ -71,7 +59,14 @@ export function MainStack({ navigation }) {
             instead of the default push/pop card transition. */}
         <Stack.Screen name="Day" component={KeyboardAvoidingDay} options={{ presentation: "modal" }} />
         <Stack.Screen name="History" component={KeyboardAvoidingHistory} />
-        <Stack.Screen name="TemplateDetail" component={KeyboardAvoidingTemplateDetail} />
+        <Stack.Screen name="RoutineDetail" component={KeyboardAvoidingRoutineDetail} />
+        {/* Read-only recap, no text inputs — no withKeyboardAvoiding needed
+            (same reasoning as ExerciseFocus below). Modal presentation so it
+            reads as a "workout finished" moment whether it's pushed from
+            Day's own "Summary" button or opened by WorkoutTimerBadge's
+            global "End workout" action, which has no Day screen underneath
+            it to slide up from. */}
+        <Stack.Screen name="WorkoutSummary" component={WorkoutSummaryScreen} options={{ presentation: "modal" }} />
         {/* No withKeyboardAvoiding here: ExerciseFocusView's pager pages are
             each their own KeyboardAwareScrollView, which already scrolls the
             focused Counter field above the keyboard. Wrapping the whole
@@ -79,8 +74,6 @@ export function MainStack({ navigation }) {
             to resize/pad for the same keyboard at once. */}
         <Stack.Screen name="ExerciseFocus" component={ExerciseFocusScreen} />
       </Stack.Navigator>
-
-      {showSignIn && <SignInModal cloudSync={cloudSync} onClose={() => setShowSignIn(false)} />}
     </View>
   );
 }
