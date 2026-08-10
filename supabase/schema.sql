@@ -97,16 +97,16 @@ drop policy if exists "profiles_insert_own" on public.profiles;
 create policy "profiles_insert_own" on public.profiles
   for insert with check (auth.uid() = id);
 
--- Mirrors the client-side gate in useCloudSync.js: cloud sync (the app's
--- only source of UPDATEs against this table) is a premium entitlement, so a
--- non-premium row can't be written even by its own owner — closing the gap
--- a modified/patched client could otherwise use to push to a non-premium
--- row directly. `premium` itself is never part of the client's update
--- payload, so this checks the pre-update row (`using`), not attacker-
--- supplied input.
+-- Profile/biometric fields (name, username, birthday, gender, height,
+-- weight, picture) sync to the cloud for every signed-in account, free or
+-- premium — only backup_data (exercises/routines/workouts/unit) is a
+-- premium entitlement. Column-level enforcement of that narrower paywall
+-- lives in protect_premium_columns below (a row-level policy can't
+-- distinguish which columns an UPDATE touches), so this policy just checks
+-- ownership.
 drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles
-  for update using (auth.uid() = id and premium);
+  for update using (auth.uid() = id);
 
 -- `premium`/`premium_renewal`/`premium_override` are entitlement state
 -- driven only by the payment provider's webhook (supabase/functions/
@@ -125,6 +125,28 @@ create policy "profiles_update_own" on public.profiles
 -- is pinned true against every subsequent writer including the webhook —
 -- so a manually-comped account can't be un-premiumed by an EXPIRATION event
 -- for a subscription it was never actually paying for.
+--
+-- Also protects backup_data: profiles_update_own now lets any owner update
+-- their own row (see above), but the workout/exercise/routine backup itself
+-- stays a premium entitlement — a non-premium writer (anything but
+-- service_role) gets backup_data silently reverted to its previous value,
+-- same "revert rather than error" treatment as the premium columns
+-- themselves. Checked against new.premium (already normalized above, so
+-- this sees the real post-normalization entitlement) rather than
+-- old.premium, so a premium_override row still gets to write backup_data
+-- even from a stale client that doesn't know about it yet.
+--
+-- Clearing to '{}' is exempted from that revert: "Clear backup data"
+-- (clearBackupData in useCloudSync.js) is deliberately shown to non-premium
+-- accounts that still have a stale backup left over from before a downgrade
+-- (hasBackupData — see DangerZoneSection.js), so a deletion must go through
+-- even without premium. Without this exemption the revert above silently
+-- no-ops that exact write: the client gets no error and clears its own
+-- hasBackupData flag, but the cloud row's backup_data — every custom
+-- exercise, routine, and past workout in it — is left completely intact.
+-- Only the empty object is allowed through non-premium; any non-empty
+-- backup_data still reverts, so a non-premium client can never use this
+-- path to write/restore real backup data.
 create or replace function public.protect_premium_columns()
 returns trigger
 language plpgsql
@@ -138,6 +160,10 @@ begin
 
   if old.premium_override then
     new.premium := true;
+  end if;
+
+  if not new.premium and auth.role() <> 'service_role' and new.backup_data <> '{}'::jsonb then
+    new.backup_data := old.backup_data;
   end if;
 
   return new;

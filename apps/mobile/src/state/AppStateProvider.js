@@ -190,25 +190,40 @@ export function AppStateProvider({ children }) {
     return dayWorkoutsActions.createWorkout(dateKey);
   };
 
+  // Full wipe back to a signed-out placeholder — used by useCloudSync's
+  // deleteAccount once the account itself is gone server-side, so no
+  // profile/biometric field (name, username, birthday, gender, height,
+  // weight, picture, email) from the deleted account lingers in local
+  // state. Passed down rather than reset inline in AppStateProvider so
+  // DEFAULT_PROFILE (defined here) stays the single source of truth for
+  // what "signed out" looks like.
+  const resetProfile = () => setProfile(DEFAULT_PROFILE);
+
   const cloudSync = useCloudSync({
-    profile, setProfile,
+    profile, setProfile, resetProfile,
     exercises, setExercises,
     routines, setRoutines,
     workouts, setWorkouts,
     unit, setUnit,
   });
 
-  // Wipes every logged workout on this device (Profile's "Danger zone" —
-  // ConfirmActionModal gates the call). Exercises/routines are left
-  // untouched since they're reusable definitions, not history — only
-  // `workouts` is what someone means by "workout data" here. Also clears
-  // the in-progress workout timer, since it's meaningless once the workout
-  // it was tracking is gone; the debounced push effect above picks up the
-  // `workouts` change and re-syncs the (now-empty) history to the cloud
-  // like any other edit, so this doesn't touch cloud backup on its own —
-  // clearBackupData in useCloudSync does that.
+  // Wipes every logged workout, routine, and custom exercise/stretch
+  // routine on this device (Profile's "Danger zone" — ConfirmActionModal
+  // gates the call). Stretch routines aren't a separate slice — they live
+  // in `exercises` as custom entries (see addStretchRoutine in
+  // useExerciseActions) — so resetting `exercises` back to SEED_EXERCISES
+  // drops both custom exercises and stretch routines in one go, while
+  // leaving the built-in exercise list intact (reconcileExercises would
+  // just reconstruct it from SEED_EXERCISES on the next load anyway). Also
+  // clears the in-progress workout timer, since it's meaningless once the
+  // workout it was tracking is gone; the debounced push effect above picks
+  // up the workouts/routines/exercises changes and re-syncs the (now-empty)
+  // history to the cloud like any other edit, so this doesn't touch cloud
+  // backup on its own — clearBackupData in useCloudSync does that.
   const clearWorkoutData = () => {
     setWorkouts({});
+    setRoutines([]);
+    setExercises(SEED_EXERCISES);
     setWorkoutTimerStartedAt(null);
   };
 

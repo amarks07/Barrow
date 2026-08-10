@@ -12,9 +12,10 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 // BiometricPromptModal/PremiumPlaceholderModal. Closes immediately on any
 // option — the system camera/library picker takes over the screen next, and
 // the upload itself keeps running via `profilePicture` (owned by the
-// caller) after this unmounts; ProfileSettingsView's avatar shows its own
+// caller) after this unmounts; EditableAvatar shows its own
 // `profilePicture.uploading` spinner for that window, and failures surface
-// via Alert.alert from the hook rather than inline sheet state.
+// as an ErrorModal (also owned by EditableAvatar) rather than inline sheet
+// state.
 export function ChangeProfilePictureSheet({ hasPicture, profilePicture, onClose }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();

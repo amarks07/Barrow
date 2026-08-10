@@ -78,16 +78,6 @@ export function ProfileOnboardingModal({ profile, onUpdate, onClose, onPersistAs
     setStep("omitted");
   };
 
-  const linkTextStyle = {
-    fontFamily: FONT_DISPLAY,
-    fontSize: 13,
-    lineHeight: 13,
-    textTransform: "uppercase",
-    includeFontPadding: false,
-    textAlignVertical: "center",
-    color: tokens.textDim,
-  };
-
   const field = FIELD_CONFIG[step];
   const Picker = field?.Picker;
 
@@ -120,13 +110,9 @@ export function ProfileOnboardingModal({ profile, onUpdate, onClose, onPersistAs
                   workouts.
                 </Text>
                 <Button label="Continue" onPress={startCycle} variant="solid" size="medium" fullWidth style={{ marginBottom: 14 }} />
-                <View className="flex-row items-center justify-between">
-                  <Pressable onPress={onClose} accessibilityLabel="Skip">
-                    <Text style={linkTextStyle}>Skip</Text>
-                  </Pressable>
-                  <Pressable onPress={handleDontAskAgain} accessibilityLabel="Don't ask again">
-                    <Text style={linkTextStyle}>Don't ask again</Text>
-                  </Pressable>
+                <View className="flex-row items-center justify-between pt-3">
+                  <Button label="Skip" onPress={onClose} variant="outline" size="small" />
+                  <Button label="Don't ask again" onPress={handleDontAskAgain} variant="outline" size="small" />
                 </View>
               </>
             ) : (

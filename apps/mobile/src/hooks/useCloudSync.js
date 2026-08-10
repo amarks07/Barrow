@@ -87,22 +87,26 @@ function preferLocal(localValue, cloudValue) {
   return localValue === null || localValue === undefined || localValue === "" ? cloudValue : localValue;
 }
 
-// Optional cloud backup, gated behind the `premium` entitlement on the
-// user's `profiles` row (set via billing/admin, never by this client): sign
-// in with email + password, and once the account is confirmed premium,
-// every local change to profile/exercises/routines/workouts/unit is
-// auto-pushed (debounced) to that row. A signed-in non-premium account
-// stays fully usable on local data — it just never pulls from or pushes to
-// the cloud (see the `!data.premium` branch in syncSession, and the
-// `profile.premium` checks on the push effect/syncNow below). Signing in as
-// premium on a device with existing local data merges the cloud copy into
-// local state rather than replacing it: for exercises/routines/workouts, an
-// id present on both sides keeps the phone's version, and an id only
-// present in the cloud gets added locally. `unit` keeps the phone's value
-// unless the phone's is empty. The merged result is then pushed back up so
-// the cloud row matches too — no confirmation needed since the phone's data
-// is never clobbered.
-export function useCloudSync({ profile, setProfile, exercises, setExercises, routines, setRoutines, workouts, setWorkouts, unit, setUnit }) {
+// Cloud sync: sign in with email + password (or Google), and identity/
+// biometric fields (name, username, birthday, gender, height, weight,
+// picture) auto-push (debounced) to that account's `profiles` row for
+// every signed-in account, free or premium — that's what actually seeds
+// the row right after sign-up, since the DB trigger that creates it
+// (handle_new_user, supabase/schema.sql) only knows `id`/`email`, not any
+// of the local device state this hook pushes once a session exists. Only
+// `backup_data` (exercises/routines/workouts/unit) is gated behind the
+// `premium` entitlement (set via billing/admin, never by this client) —
+// see the `!data.premium` branch in syncSession, and the `profile.premium`
+// check inside pushNow below. A signed-in non-premium account still gets
+// its profile/biometrics synced across devices; it just never backs up
+// workout data. Signing in as premium on a device with existing local data
+// merges the cloud copy into local state rather than replacing it: for
+// exercises/routines/workouts, an id present on both sides keeps the
+// phone's version, and an id only present in the cloud gets added locally.
+// `unit` keeps the phone's value unless the phone's is empty. The merged
+// result is then pushed back up so the cloud row matches too — no
+// confirmation needed since the phone's data is never clobbered.
+export function useCloudSync({ profile, setProfile, resetProfile, exercises, setExercises, routines, setRoutines, workouts, setWorkouts, unit, setUnit }) {
   const [session, setSession] = useState(null);
   const [status, setStatus] = useState("idle"); // idle | authenticating | confirm-email | reset-email-sent | syncing | synced | premium-required | error
   const [error, setError] = useState(null);
@@ -286,39 +290,38 @@ export function useCloudSync({ profile, setProfile, exercises, setExercises, rou
       const cloudHasData = data.backup_data && Object.keys(data.backup_data).length > 0;
       setHasBackupData(!!cloudHasData);
 
-      // Cloud sync (pull, merge, and the auto/manual push below) is a
-      // premium entitlement — a signed-in non-premium account stays fully
-      // usable on local data, it just never exchanges anything with the
-      // cloud row. Still record the entitlement flag itself (source of
-      // truth for the rest of the hook's premium checks) even when it's
-      // false, so CloudBackupSection can show the right state.
+      // The remaining profile identity/biometric fields (name/username/
+      // birthday/gender/height/weight) sync for every account, premium or
+      // not — only backup_data (below) is a premium entitlement. Same
+      // phone-wins merge as exercises/routines/workouts/unit: keep
+      // whatever's already on the phone unless that field is blank there,
+      // in which case fall back to the cloud's value. Without this, a
+      // null/blank cloud field would clobber a populated phone value on
+      // every sign-in/re-sync.
+      setProfile((p) => ({
+        ...p,
+        firstName: preferLocal(p.firstName, data.first_name),
+        lastName: preferLocal(p.lastName, data.last_name),
+        username: preferLocal(p.username, data.username),
+        email: sess.user.email,
+        birthday: preferLocal(p.birthday, data.birthday === null ? "" : data.birthday),
+        gender: preferLocal(p.gender, data.gender),
+        height: preferLocal(p.height, data.height === null ? "" : String(data.height)),
+        weight: preferLocal(p.weight, data.weight === null ? "" : String(data.weight)),
+        // Entitlement flag, not a user-editable field — pulled from the db
+        // as the source of truth (set via billing/admin) but deliberately
+        // left out of the push payload below so a stale local value can
+        // never overwrite it server-side.
+        premium: data.premium,
+      }));
+
+      // Backup data (exercises/routines/workouts/unit) stays a premium
+      // entitlement — a signed-in non-premium account still gets its
+      // profile/biometrics synced above, it just never exchanges workout
+      // data with the cloud row.
       if (!data.premium) {
-        setProfile((p) => ({ ...p, premium: false }));
         setStatus("premium-required");
       } else {
-        // The remaining profile identity fields (name/username/birthday/
-        // gender/height/weight) follow the same phone-wins merge as
-        // exercises/routines/workouts/unit below: keep whatever's already
-        // on the phone unless that field is blank there, in which case fall
-        // back to the cloud's value. Without this, a null/blank cloud field
-        // would clobber a populated phone value on every sign-in/re-sync.
-        setProfile((p) => ({
-          ...p,
-          firstName: preferLocal(p.firstName, data.first_name),
-          lastName: preferLocal(p.lastName, data.last_name),
-          username: preferLocal(p.username, data.username),
-          email: sess.user.email,
-          birthday: preferLocal(p.birthday, data.birthday === null ? "" : data.birthday),
-          gender: preferLocal(p.gender, data.gender),
-          height: preferLocal(p.height, data.height === null ? "" : String(data.height)),
-          weight: preferLocal(p.weight, data.weight === null ? "" : String(data.weight)),
-          // Entitlement flag, not a user-editable field — pulled from the db
-          // as the source of truth (set via billing/admin) but deliberately
-          // left out of the push payload below so a stale local value can
-          // never overwrite it server-side.
-          premium: true,
-        }));
-
         const localHasData = Object.keys(workouts).length > 0;
 
         // Falls back to the pre-rename `templates` key so an old cloud
@@ -457,27 +460,33 @@ export function useCloudSync({ profile, setProfile, exercises, setExercises, rou
 
   // Shared by the debounced auto-push effect below and the manual `syncNow`
   // (the CloudBackupSection "Sync now" button) — pushes the current
-  // in-memory state up, unconditionally, right now.
+  // in-memory state up, unconditionally, right now. Identity/biometric
+  // fields go up for every signed-in account; backup_data is only included
+  // for premium ones — omitted rather than sent-and-reverted so a
+  // non-premium push doesn't stamp updated_at on a write that didn't
+  // actually touch anything backup-related, and so hasBackupData isn't
+  // reset to true off a write the server-side trigger silently no-ops (see
+  // protect_premium_columns in supabase/schema.sql).
   const pushNow = async () => {
     setStatus("syncing");
-    const { error: pushError } = await supabase
-      .from("profiles")
-      .update({
-        first_name: profile.firstName,
-        last_name: profile.lastName,
-        username: profile.username,
-        picture_url: profile.pictureUrl,
-        birthday: toNullableDate(profile.birthday),
-        gender: profile.gender,
-        height: toNullableNumber(profile.height),
-        weight: toNullableNumber(profile.weight),
-        backup_data: { exercises: exercises.filter((e) => e.custom), routines, workouts, unit },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", session.user.id);
+    const payload = {
+      first_name: profile.firstName,
+      last_name: profile.lastName,
+      username: profile.username,
+      picture_url: profile.pictureUrl,
+      birthday: toNullableDate(profile.birthday),
+      gender: profile.gender,
+      height: toNullableNumber(profile.height),
+      weight: toNullableNumber(profile.weight),
+      updated_at: new Date().toISOString(),
+    };
+    if (profile.premium) {
+      payload.backup_data = { exercises: exercises.filter((e) => e.custom), routines, workouts, unit };
+    }
+    const { error: pushError } = await supabase.from("profiles").update(payload).eq("id", session.user.id);
     setStatus(pushError ? "error" : "synced");
     if (pushError) setError(friendlyAuthError(pushError));
-    else setHasBackupData(true);
+    else if (profile.premium) setHasBackupData(true);
   };
 
   // Profile's "Danger zone" — wipes the cloud row's backup_data (gated
@@ -503,34 +512,52 @@ export function useCloudSync({ profile, setProfile, exercises, setExercises, rou
   // the delete-account Edge Function verifies the caller's own session and
   // then uses the service_role key (which the client never has) to delete
   // the auth.users row, which cascades to the profiles row too (see
-  // supabase/schema.sql) — so nothing about this account is left on the
-  // server. Signs out immediately on success, matching "logs them out
-  // instantly"; on failure, leaves the (still-valid) session alone and
-  // surfaces the error rather than signing out of an account that wasn't
-  // actually deleted. Local on-device data is untouched, same as signOut.
+  // supabase/schema.sql), after first deleting the S3 profile picture object
+  // (also in that Edge Function, since only it holds the AWS credentials —
+  // see supabase/functions/delete-account/index.ts) — so nothing about this
+  // account is left on the server. Signs out immediately on success,
+  // matching "logs them out instantly"; on failure, leaves the (still-valid)
+  // session alone and surfaces the error rather than signing out of an
+  // account that wasn't actually deleted. Workout/routine/exercise data on
+  // this device is left untouched, same as signOut — but the profile itself
+  // (name, username, birthday, gender, height, weight, picture, email) is
+  // reset to a blank signed-out placeholder via resetProfile: those fields
+  // belong to the account that was just deleted, `pictureUrl` in particular
+  // points at an S3 object that no longer exists, and leaving any of them
+  // set would otherwise leak into a *different* account signing in later on
+  // this device, since syncSession's preferLocal merge keeps whatever
+  // non-blank value is already sitting in local `profile` state.
+  // Returns the failure message on error (for the caller to show, e.g. via
+  // ErrorModal — DangerZoneSection is the only caller) and undefined on
+  // success, rather than surfacing the failure itself: this hook has no UI
+  // of its own to render it in.
   const deleteAccount = async () => {
-    if (!supabase || !session) return;
+    if (!supabase || !session) return undefined;
     setStatus("syncing");
     const { error: fnError } = await supabase.functions.invoke("delete-account");
     if (fnError) {
       const message = friendlyAuthError(fnError);
       setStatus("error");
       setError(message);
-      Alert.alert("Couldn't delete account", message);
-      return;
+      return message;
     }
     await signOut();
+    resetProfile();
+    return undefined;
   };
 
-  // Debounced auto-push on every local change, while signed in. Skipped
+  // Debounced auto-push on every local change, while signed in — for every
+  // account, premium or not (pushNow itself decides whether backup_data is
+  // part of the payload). This is also what seeds a brand-new sign-up's
+  // row with local profile/biometric state, since the DB trigger that
+  // creates the row doesn't know it (see the module comment above). Skipped
   // while syncLocked — a restored session that hasn't cleared the re-auth
-  // gate yet shouldn't leak local edits to the cloud — and while
-  // !profile.premium, since cloud sync is a premium entitlement (see
-  // syncSession). syncLocked is listed as a dep (unlike the others below)
-  // specifically so unlocking itself re-evaluates this effect and schedules
-  // a push for anything that changed locally while it was locked.
+  // gate yet shouldn't leak local edits to the cloud. syncLocked is listed
+  // as a dep (unlike the others below) specifically so unlocking itself
+  // re-evaluates this effect and schedules a push for anything that changed
+  // locally while it was locked.
   useEffect(() => {
-    if (!supabase || !session || recoveryMode || isApplyingRemoteRef.current || syncLocked || !profile.premium) return undefined;
+    if (!supabase || !session || recoveryMode || isApplyingRemoteRef.current || syncLocked) return undefined;
 
     if (pushTimeoutRef.current) clearTimeout(pushTimeoutRef.current);
     pushTimeoutRef.current = setTimeout(pushNow, DEBOUNCE_MS);
@@ -541,9 +568,13 @@ export function useCloudSync({ profile, setProfile, exercises, setExercises, rou
 
   // Manual "Sync now" — skips the debounce and pushes immediately, so a
   // user who wants confidence their latest change is backed up doesn't have
-  // to wait out DEBOUNCE_MS or make another edit to re-arm it.
+  // to wait out DEBOUNCE_MS or make another edit to re-arm it. Available
+  // regardless of premium, same as the debounced push above — CloudBackupSection
+  // only renders the button once premium anyway (see its own `!profile.premium`
+  // branch), since for a non-premium account there's no backup status worth
+  // giving a manual retry for.
   const syncNow = async () => {
-    if (!supabase || !session || syncLocked || !profile.premium) return;
+    if (!supabase || !session || syncLocked) return;
     if (pushTimeoutRef.current) clearTimeout(pushTimeoutRef.current);
     await pushNow();
   };
@@ -636,7 +667,13 @@ export function useCloudSync({ profile, setProfile, exercises, setExercises, rou
 
     const { queryParams } = Linking.parse(result.url);
     if (!queryParams?.code) {
-      setError("Google sign-in didn't return a valid code.");
+      // A successful redirect back into the app without a `code` almost
+      // always means Supabase/Google sent an `error`/`error_description`
+      // instead (e.g. redirectTo not in Supabase's allowed Redirect URLs
+      // list, or the user denied consent) — surface that instead of a
+      // generic message so it's actually actionable.
+      const description = queryParams?.error_description || queryParams?.error;
+      setError(description ? `Google sign-in failed: ${description}` : "Google sign-in didn't return a valid code.");
       setStatus("error");
       return;
     }

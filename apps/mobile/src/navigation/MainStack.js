@@ -26,8 +26,8 @@ const KeyboardAvoidingRoutineDetail = withKeyboardAvoiding(RoutineDetailScreen);
 //
 // Tapping the profile icon always navigates straight to the "Profile"
 // route, signed in or not and with no authentication prompt of any kind —
-// ProfileView (via CloudBackupSection) handles the signed-out case by
-// showing a "Sign in" CTA instead of sync status, and the mandatory
+// ProfileView handles the signed-out case by showing a "Sign in/up" CTA
+// instead of sync status, and the mandatory
 // cloud-sync re-auth gate (see useCloudSync's syncLocked) only ever
 // triggers from the explicit "Unlock to sync" button inside that screen,
 // never from opening it.
