@@ -14,6 +14,13 @@ import appJson from "../../app.json";
 // be the longest list; other categories are just flat string arrays.
 export const PATCH_NOTES = [
   {
+    version: "1.2.1",
+    title: "Cloud backup fix",
+    notes: {
+      fixes: ["Fixed cloud backup not working in installed builds (it only worked in local dev).", "Fixed an issue where the user could not sign in to their account."],
+    },
+  },
+  {
     version: "1.2.0",
     title: "Routines, stretching, and profile pictures",
     notes: {
