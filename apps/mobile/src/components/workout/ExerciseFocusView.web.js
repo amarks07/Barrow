@@ -33,7 +33,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, plateCalculatorEn
   const prefill = lastSet
     ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
     : rec
-    ? { reps: rec.recReps, weight: rec.recWeight }
+    ? { reps: rec.recReps, weight: rec.recWeight, side: rec.side, warmup: rec.warmup }
     : null;
   const singleSet = isSingle ? entry.sets[0] : null;
 

@@ -23,7 +23,7 @@ function DayPanel({
   dateKey, isActive, initialWorkoutId, navigation,
   exercises, routines, unit, workouts, setWorkouts,
   nextId, dayWorkoutsActions, routineActions, exerciseActions, workoutView, focusNotificationEnabled,
-  plateCalculatorEnabled, stretchRoutinesEnabled, workoutTimerEnabled, workoutTimerStartedAt,
+  plateCalculatorEnabled, workoutTimerEnabled, workoutTimerStartedAt,
   getOrCreateWorkoutForDate,
 }) {
   // True only while DayScreen itself is the screen on top — false once
@@ -266,7 +266,6 @@ function DayPanel({
       onSaveAsRoutine={(dk, wid, name) => routineActions.saveWorkoutAsRoutine(dk, wid, name)}
       onUpdateRoutine={(dk, wid, routineId) => routineActions.updateRoutineFromWorkout(routineId, dk, wid)}
       onAddCustomExercise={exerciseActions.addCustomExercise}
-      stretchRoutinesEnabled={stretchRoutinesEnabled}
       workoutView={workoutView}
       plateCalculatorEnabled={plateCalculatorEnabled}
       onOpenExerciseFocus={(exerciseId) => navigation.navigate("ExerciseFocus", { dateKey, workoutId: selectedWorkoutId, exerciseId })}
@@ -285,7 +284,7 @@ export function DayScreen({ route, navigation }) {
   const {
     exercises, routines, unit, workouts, setWorkouts,
     nextId, dayWorkoutsActions, routineActions, exerciseActions, workoutView, focusNotificationEnabled,
-    plateCalculatorEnabled, stretchRoutinesEnabled, workoutTimerEnabled, workoutTimerStartedAt,
+    plateCalculatorEnabled, workoutTimerEnabled, workoutTimerStartedAt,
     getOrCreateWorkoutForDate,
   } = useAppState();
 
@@ -332,7 +331,6 @@ export function DayScreen({ route, navigation }) {
           workoutView={workoutView}
           focusNotificationEnabled={focusNotificationEnabled}
           plateCalculatorEnabled={plateCalculatorEnabled}
-          stretchRoutinesEnabled={stretchRoutinesEnabled}
           workoutTimerEnabled={workoutTimerEnabled}
           workoutTimerStartedAt={workoutTimerStartedAt}
           getOrCreateWorkoutForDate={getOrCreateWorkoutForDate}

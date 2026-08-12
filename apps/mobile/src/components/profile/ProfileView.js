@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft } from "lucide-react-native";
+import { ArrowLeft, Sparkles } from "lucide-react-native";
 import { Button } from "../ui/Button";
 import { IconBtn } from "../ui/IconBtn";
 import { MenuRow } from "../ui/MenuRow";
@@ -97,6 +97,7 @@ export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWork
               variant="solid"
               size="medium"
               fullWidth
+              icon={<Sparkles size={16} color="#121214" />}
               style={{ borderColor: "rgba(0,0,0,0.3)" }}
             />
           </View>

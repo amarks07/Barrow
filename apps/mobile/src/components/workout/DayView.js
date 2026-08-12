@@ -190,10 +190,25 @@ function WorkoutEntryRow({
           {run.isGrouped && (
             <>
               {!run.isFirst && (
-                <View style={{ position: "absolute", right: 3, top: 0, bottom: "50%", width: 1.5, backgroundColor: tokens.accent }} />
+                // top: -1.5, not 0 — the rail is stretched to the row's
+                // content box, which sits *inside* the row's own 1.5px
+                // border-top (borders are outside a flex child's stretch
+                // area), so top: 0 stopped the line right at the edge of
+                // that content box, leaving this row's own border-top band
+                // uncovered. -1.5 reaches through it to this row's true top
+                // edge, where the previous row's bottom segment ends.
+                <View style={{ position: "absolute", right: 3, top: -1.5, bottom: "50%", width: 1.5, backgroundColor: tokens.accent }} />
               )}
               {!run.isLast && (
-                <View style={{ position: "absolute", right: 3, top: "50%", bottom: 0, width: 1.5, backgroundColor: tokens.accent }} />
+                // bottom: -1.5, not 0, for the same reason: reach through
+                // this row's own border-bottom band to its true bottom edge.
+                // Deliberately not -3 (reaching into the next row's border-top
+                // band too) — each row is its own composited Animated.View,
+                // so overflow into a sibling's box gets painted over by that
+                // sibling instead of showing through. Each row only ever
+                // covers its own border bands; they meet exactly at the
+                // shared edge.
+                <View style={{ position: "absolute", right: 3, top: "50%", bottom: -1.5, width: 1.5, backgroundColor: tokens.accent }} />
               )}
               <View
                 style={{
@@ -303,7 +318,7 @@ export function DayView({
   onBack, onSelectWorkout, onCreateWorkout, onDeleteWorkout,
   onSetNote, onAddExercise, onRemoveExercise, onSwapExercise,
   onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, onApplyRoutine, onOpenHistory, onSaveAsRoutine, onUpdateRoutine, onSetAngle,
-  onAddCustomExercise, stretchRoutinesEnabled, onReorderExercise, onCreateSuperset, onUngroupSuperset, workoutView, plateCalculatorEnabled, onOpenExerciseFocus,
+  onAddCustomExercise, onReorderExercise, onCreateSuperset, onUngroupSuperset, workoutView, plateCalculatorEnabled, onOpenExerciseFocus,
   onOpenSummary,
 }) {
   const { tokens } = useTheme();
@@ -654,7 +669,7 @@ export function DayView({
           const prefill = lastSet
             ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
             : rec
-            ? { reps: rec.recReps, weight: rec.recWeight }
+            ? { reps: rec.recReps, weight: rec.recWeight, side: rec.side, warmup: rec.warmup }
             : null;
 
           const isDragging = draggingGroupIds.has(entry.exerciseId);
@@ -756,7 +771,6 @@ export function DayView({
           }}
           onClose={() => setShowPicker(false)}
           onAddCustom={onAddCustomExercise}
-          stretchRoutinesEnabled={stretchRoutinesEnabled}
           doneLabel="Add"
         />
       )}
@@ -774,7 +788,6 @@ export function DayView({
           }}
           onClose={() => setSwapExId(null)}
           onAddCustom={onAddCustomExercise}
-          stretchRoutinesEnabled={stretchRoutinesEnabled}
         />
       )}
 

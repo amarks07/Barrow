@@ -6,6 +6,7 @@ import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 import { Button } from "../ui/Button";
 import { NoteList } from "./NoteList";
+import { formatPatchNoteDate } from "../../content/patchNotes";
 
 // Shown exactly once per version bump, on app open, for the version just
 // installed (see usePatchNotes) — never reappears once dismissed, until the
@@ -44,7 +45,12 @@ export function PatchNotesModal({ entry, onClose }) {
       >
         <View className="flex-row items-center gap-3 mb-2">
           <Megaphone size={22} color={tokens.accent} />
-          <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: tokens.text, flex: 1 }}>{`What's new in v${entry.version}`}</Text>
+          <View className="flex-1">
+            <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: tokens.text }}>{`What's new in v${entry.version}`}</Text>
+            {entry.date ? (
+              <Text style={{ fontSize: 12, color: tokens.textDim }}>{formatPatchNoteDate(entry.date)}</Text>
+            ) : null}
+          </View>
         </View>
         <NoteList notes={entry.notes} tokens={tokens} />
         <Button label="Got it" onPress={onClose} variant="solid" size="medium" fullWidth />

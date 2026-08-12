@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Text, View } from "react-native";
-import { Cloud } from "lucide-react-native";
+import { Cloud, Sparkles } from "lucide-react-native";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 import { Button } from "../ui/Button";
@@ -62,6 +62,7 @@ export function CloudBackupSection({ cloudSync, profile, onSignIn }) {
             onPress={() => setPremiumModal("get")}
             variant="solid"
             size="medium"
+            icon={<Sparkles size={16} color="#121214" />}
             style={{ borderColor: "rgba(0,0,0,0.3)" }}
           />
         </View>

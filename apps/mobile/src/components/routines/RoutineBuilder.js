@@ -12,7 +12,7 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 
 // Bottom-sheet popup — a dark backdrop with a panel sliding up from the
 // bottom, capped at 80% of screen height, matching the web app's shape.
-export function RoutineBuilder({ exercises, onClose, onSave, onAddCustomExercise, stretchRoutinesEnabled }) {
+export function RoutineBuilder({ exercises, onClose, onSave, onAddCustomExercise }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
@@ -243,7 +243,6 @@ export function RoutineBuilder({ exercises, onClose, onSave, onAddCustomExercise
           onUnpick={(ex) => removePicked(ex.id)}
           onClose={() => setShowPicker(false)}
           onAddCustom={onAddCustomExercise}
-          stretchRoutinesEnabled={stretchRoutinesEnabled}
           doneLabel="Done"
         />
       )}

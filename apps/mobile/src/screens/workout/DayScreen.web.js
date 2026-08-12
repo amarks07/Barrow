@@ -19,7 +19,7 @@ export function DayScreen({ route, navigation }) {
   const {
     exercises, routines, unit, workouts, setWorkouts,
     nextId, dayWorkoutsActions, routineActions, exerciseActions, workoutView, focusNotificationEnabled,
-    plateCalculatorEnabled, stretchRoutinesEnabled,
+    plateCalculatorEnabled,
     getOrCreateWorkoutForDate,
   } = useAppState();
 
@@ -172,7 +172,6 @@ export function DayScreen({ route, navigation }) {
       onSaveAsRoutine={(dk, wid, name) => routineActions.saveWorkoutAsRoutine(dk, wid, name)}
       onUpdateRoutine={(dk, wid, routineId) => routineActions.updateRoutineFromWorkout(routineId, dk, wid)}
       onAddCustomExercise={exerciseActions.addCustomExercise}
-      stretchRoutinesEnabled={stretchRoutinesEnabled}
       workoutView={workoutView}
       plateCalculatorEnabled={plateCalculatorEnabled}
       onOpenExerciseFocus={(exerciseId) => navigation.navigate("ExerciseFocus", { dateKey, workoutId: selectedWorkoutId, exerciseId })}

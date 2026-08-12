@@ -22,7 +22,7 @@ import { BUTTON_HEIGHT } from "../../theme/dimensions";
 // it instead of overlapping, without restructuring that bar itself.
 const NAV_BAR_HEIGHT = 16 + BUTTON_HEIGHT.medium;
 
-function ExercisePanel({ entry, ex, unit, workouts, workoutId, plateCalculatorEnabled, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, showName, focusSetId, focusField }) {
+function ExercisePanel({ entry, ex, unit, workouts, workoutId, plateCalculatorEnabled, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, onOpenHistory, showName, focusSetId, focusField }) {
   const { tokens } = useTheme();
   const isStretch = ex.type === "stretch";
   const isSingle = ex.setFormat === "single";
@@ -32,7 +32,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, plateCalculatorEn
   const prefill = lastSet
     ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
     : rec
-    ? { reps: rec.recReps, weight: rec.recWeight }
+    ? { reps: rec.recReps, weight: rec.recWeight, side: rec.side, warmup: rec.warmup }
     : null;
   const singleSet = isSingle ? entry.sets[0] : null;
 
@@ -47,15 +47,18 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, plateCalculatorEn
             {ex.angles && <Text style={{ fontSize: 11, color: tokens.accent }}>· {entry.angle || ex.angles[0]}</Text>}
           </View>
           {/* Only shown here for a superset's multiple panels — a single
-              exercise has just one note, so its button lives in the header
-              instead (see ExerciseFocusView), next to the back button and
-              title that already identify it. */}
-          <NoteField
-            value={entry.note}
-            onChange={(note) => onSetEntryNote(entry.exerciseId, note)}
-            placeholder="Add exercise note"
-            title={`${ex.name} note`}
-          />
+              exercise has just one note/history, so these buttons live in
+              the header instead (see ExerciseFocusView), next to the back
+              button and title that already identify it. */}
+          <View className="flex-row items-center gap-2">
+            <Button label="History" size="small" onPress={() => onOpenHistory(entry.exerciseId)} />
+            <NoteField
+              value={entry.note}
+              onChange={(note) => onSetEntryNote(entry.exerciseId, note)}
+              placeholder="Add exercise note"
+              title={`${ex.name} note`}
+            />
+          </View>
         </View>
       )}
 
@@ -131,7 +134,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, plateCalculatorEn
 
 export function ExerciseFocusView({
   dateKey, dayWorkouts, activeWorkoutId, initialExerciseId, exercises, unit, workouts, plateCalculatorEnabled,
-  onBack, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote,
+  onBack, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, onOpenHistory,
   groupSupersets = true,
   onStepChange,
   focusSetId, focusField,
@@ -215,12 +218,15 @@ export function ExerciseFocusView({
           </Text>
         </View>
         {primaryEntry && primaryEx && (
-          <NoteField
-            value={primaryEntry.note}
-            onChange={(note) => onSetEntryNote(primaryEntry.exerciseId, note)}
-            placeholder="Add exercise note"
-            title={`${primaryEx.name} note`}
-          />
+          <View className="flex-row items-center gap-2">
+            <Button label="History" size="small" onPress={() => onOpenHistory(primaryEntry.exerciseId)} />
+            <NoteField
+              value={primaryEntry.note}
+              onChange={(note) => onSetEntryNote(primaryEntry.exerciseId, note)}
+              placeholder="Add exercise note"
+              title={`${primaryEx.name} note`}
+            />
+          </View>
         )}
       </View>
 
@@ -249,6 +255,7 @@ export function ExerciseFocusView({
                   onUpdateSet={onUpdateSet}
                   onRemoveSet={onRemoveSet}
                   onSetEntryNote={onSetEntryNote}
+                  onOpenHistory={onOpenHistory}
                   showName={step.length > 1}
                   focusSetId={focusSetId}
                   focusField={focusField}

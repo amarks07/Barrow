@@ -135,7 +135,12 @@ export function WorkoutEntriesRecap({ entries, exercises, unit }) {
                     <View style={{ position: "absolute", right: 3, top: 0, height: dotOffset, width: 1.5, backgroundColor: tokens.accent }} />
                   )}
                   {!run.isLast && (
-                    <View style={{ position: "absolute", right: 3, top: dotOffset, bottom: 0, width: 1.5, backgroundColor: tokens.accent }} />
+                    // bottom: -1.5, not 0 — the rail is stretched to this
+                    // row's content box, which sits inside the row's own
+                    // border-bottom (borders live outside a flex child's
+                    // stretch area), so bottom: 0 left that divider band
+                    // uncovered between this row and the next one down.
+                    <View style={{ position: "absolute", right: 3, top: dotOffset, bottom: -1.5, width: 1.5, backgroundColor: tokens.accent }} />
                   )}
                   <View
                     style={{

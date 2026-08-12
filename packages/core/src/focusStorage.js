@@ -58,6 +58,38 @@ function findSet(workout, setId) {
   return null;
 }
 
+// Flattens a step's entries into the row order every renderer (currently
+// just the widget) walks — one header row per entry when the step is a
+// superset, then one row per set, or a single placeholder row for a
+// set-less entry. This is the unit `scrollOffset` counts in: RemoteViews
+// gives no real layout measurement back, so there's no way to know how many
+// rows actually fit on screen, only how many rows exist to scroll through.
+export function buildFocusRows(entries, isSuperset) {
+  const rows = [];
+  entries.forEach((entry) => {
+    let firstOfEntry = true;
+    if (isSuperset) {
+      rows.push({ type: "header", exerciseId: entry.exerciseId, firstOfEntry: true });
+      firstOfEntry = false;
+    }
+    if (entry.sets.length === 0) {
+      rows.push({ type: "empty", exerciseId: entry.exerciseId, firstOfEntry });
+    } else {
+      entry.sets.forEach((set) => {
+        rows.push({ type: "set", exerciseId: entry.exerciseId, set, firstOfEntry });
+        firstOfEntry = false;
+      });
+    }
+  });
+  return rows;
+}
+
+// Rows moved per SCROLL_UP/SCROLL_DOWN tap (focusScrollSets) — also the
+// window size the widget renders per "page" (see FocusWidget.js), so a tap
+// always lands exactly on the next/previous page rather than one that
+// partially overlaps the last.
+export const FOCUS_SCROLL_PAGE_SIZE = 5;
+
 // Resolves a focus pointer against a workouts map into exactly what a
 // widget/notification needs to render one screen: the current step's
 // identity, position, and every set on every exercise in that step (a
@@ -77,19 +109,30 @@ function resolveSnapshot(workouts, pointer, groupSupersets, exercises) {
   const activeStep = steps[stepIndex];
   const exMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const title = activeStep.map((e) => exMap[e.exerciseId]?.name).filter(Boolean).join(" + ") || "Exercise";
+  const isSuperset = activeStep.length > 1;
+  const entries = activeStep.map((e) => ({
+    exerciseId: e.exerciseId,
+    name: exMap[e.exerciseId]?.name || "Exercise",
+    angle: e.angle,
+    sets: e.sets,
+  }));
+  const rowCount = buildFocusRows(entries, isSuperset).length;
+  // Snapped to a page boundary and re-clamped on every read (not just when
+  // scrolling), so a set add/remove elsewhere that shrinks the row count
+  // can't leave a stale offset mid-page or past the end of the list — the
+  // widget always renders a full, aligned page (see FOCUS_SCROLL_PAGE_SIZE).
+  const lastPageStart = Math.floor((rowCount - 1) / FOCUS_SCROLL_PAGE_SIZE) * FOCUS_SCROLL_PAGE_SIZE;
+  const rawOffset = Math.floor((pointer.scrollOffset || 0) / FOCUS_SCROLL_PAGE_SIZE) * FOCUS_SCROLL_PAGE_SIZE;
+  const scrollOffset = Math.max(0, Math.min(rawOffset, lastPageStart));
   return {
     dateKey: pointer.dateKey,
     workoutId: pointer.workoutId,
     stepIndex,
     stepCount: steps.length,
     title,
-    isSuperset: activeStep.length > 1,
-    entries: activeStep.map((e) => ({
-      exerciseId: e.exerciseId,
-      name: exMap[e.exerciseId]?.name || "Exercise",
-      angle: e.angle,
-      sets: e.sets,
-    })),
+    isSuperset,
+    entries,
+    scrollOffset,
   };
 }
 
@@ -136,15 +179,25 @@ export async function focusAdjustWeight(storage, exercises, setId, delta) {
 
 export async function focusAddSet(storage, exercises, exerciseId) {
   const unit = await readUnit(storage);
-  return mutateAndSnapshot(storage, exercises, (workouts, pointer) => {
-    const workout = (workouts[pointer.dateKey] || []).find((w) => w.id === pointer.workoutId);
-    if (!workout) return workouts;
-    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
-    if (!entry) return workouts;
-    const last = entry.sets[entry.sets.length - 1];
-    const preset = last ? Object.fromEntries(FIELD_KEYS.map((key) => [key, last[key]])) : undefined;
-    return mutations.addSet(workouts, pointer.dateKey, pointer.workoutId, exerciseId, mutations.generateId, preset, unit);
-  });
+  const [workouts, pointer] = await Promise.all([readWorkouts(storage), readFocusPointer(storage)]);
+  if (!pointer) return null;
+  const workout = (workouts[pointer.dateKey] || []).find((w) => w.id === pointer.workoutId);
+  if (!workout) return null;
+  const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
+  if (!entry) return null;
+  const last = entry.sets[entry.sets.length - 1];
+  const preset = last ? Object.fromEntries(FIELD_KEYS.map((key) => [key, last[key]])) : undefined;
+  const next = mutations.addSet(workouts, pointer.dateKey, pointer.workoutId, exerciseId, mutations.generateId, preset, unit);
+  if (next !== workouts) await writeWorkouts(storage, next);
+  const groupSupersets = await readGroupSupersets(storage);
+  // Jump to the last page so the set that was just added is actually
+  // visible rather than requiring a manual scroll to find it — an
+  // intentionally oversized tentative offset always gets clamped down to
+  // the last page's start by resolveSnapshot (see FOCUS_SCROLL_PAGE_SIZE).
+  const tentativePointer = { ...pointer, scrollOffset: Number.MAX_SAFE_INTEGER };
+  const snapshot = resolveSnapshot(next, tentativePointer, groupSupersets, exercises);
+  if (snapshot) await storage.setItem(FOCUS_POINTER_KEY, JSON.stringify({ ...pointer, scrollOffset: snapshot.scrollOffset }));
+  return snapshot;
 }
 
 export async function focusToggleWarmup(storage, exercises, setId) {
@@ -186,7 +239,33 @@ export async function focusNavigateStep(storage, exercises, direction) {
   const currentIndex = steps.findIndex((step) => step.some((e) => e.exerciseId === pointer.exerciseId));
   const clampedCurrent = currentIndex === -1 ? 0 : currentIndex;
   const nextIndex = Math.max(0, Math.min(steps.length - 1, clampedCurrent + direction));
-  const nextPointer = { ...pointer, exerciseId: steps[nextIndex][0].exerciseId, updatedAt: Date.now() };
+  // scrollOffset resets rather than carrying over — a fresh step should
+  // always open at the top, not wherever the previous step happened to be
+  // scrolled to.
+  const nextPointer = { ...pointer, exerciseId: steps[nextIndex][0].exerciseId, scrollOffset: 0, updatedAt: Date.now() };
   await storage.setItem(FOCUS_POINTER_KEY, JSON.stringify(nextPointer));
   return resolveSnapshot(workouts, nextPointer, groupSupersets, exercises);
+}
+
+// direction: -1 (up) | 1 (down). The widget's ListWidget compiles to a real
+// native ListView (see apps/mobile/src/widget/FocusWidget.js), but swiping
+// it on an actual home screen is unreliable in practice — the gesture
+// competes with the launcher's own swipe handling and often loses, moving
+// the whole widget instead of scrolling the list. These SCROLL_UP/DOWN
+// buttons page through rows explicitly instead of depending on that swipe.
+export async function focusScrollSets(storage, exercises, direction) {
+  const [workouts, pointer, groupSupersets] = await Promise.all([
+    readWorkouts(storage),
+    readFocusPointer(storage),
+    readGroupSupersets(storage),
+  ]);
+  if (!pointer) return null;
+  // resolveSnapshot re-clamps scrollOffset against the real row count, so
+  // an out-of-range tentative value here (negative, or past the end) comes
+  // back correctly bounded — no need to duplicate step/row resolution here.
+  const tentativePointer = { ...pointer, scrollOffset: (pointer.scrollOffset || 0) + direction * FOCUS_SCROLL_PAGE_SIZE };
+  const snapshot = resolveSnapshot(workouts, tentativePointer, groupSupersets, exercises);
+  if (!snapshot) return null;
+  await storage.setItem(FOCUS_POINTER_KEY, JSON.stringify({ ...pointer, scrollOffset: snapshot.scrollOffset }));
+  return snapshot;
 }

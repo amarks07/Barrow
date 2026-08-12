@@ -3,7 +3,7 @@ import { StretchRoutinesView } from "../../components/stretch/StretchRoutinesVie
 import { useAppState } from "../../state/AppStateProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 
-export function StretchesScreen() {
+export function StretchesScreen({ navigation }) {
   const { tokens } = useTheme();
   const { exercises, exerciseActions } = useAppState();
   const stretchRoutines = exercises.filter((e) => e.type === "stretch");
@@ -13,7 +13,7 @@ export function StretchesScreen() {
       <StretchRoutinesView
         stretchRoutines={stretchRoutines}
         onCreate={exerciseActions.addStretchRoutine}
-        onUpdate={exerciseActions.updateStretchRoutine}
+        onOpenRoutine={(routineId) => navigation.navigate("StretchRoutineDetail", { routineId })}
         onDelete={exerciseActions.deleteExercise}
       />
     </View>

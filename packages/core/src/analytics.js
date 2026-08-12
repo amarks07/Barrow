@@ -26,17 +26,11 @@ export function getRecommendation(exerciseId, workouts, unit, excludeWorkoutId, 
     const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
     if (!entry || entry.sets.length === 0) continue;
 
-    let top = null;
-    entry.sets.forEach((s) => {
-      const w = convertWeight(s.weight, s.unit || unit, unit);
-      const wNum = w === "" ? 0 : w;
-      const repsNum = parseFloat(s.reps) || 0;
-      if (repsNum <= 0) return;
-      if (!top || wNum > top.weight || (wNum === top.weight && repsNum > top.reps)) {
-        top = { weight: wNum, reps: repsNum };
-      }
-    });
-    if (!top) continue;
+    const firstSet = entry.sets[0];
+    const firstReps = parseFloat(firstSet.reps) || 0;
+    if (firstReps <= 0) continue;
+    const firstWeight = convertWeight(firstSet.weight, firstSet.unit || unit, unit);
+    const top = { weight: firstWeight === "" ? 0 : firstWeight, reps: firstReps };
 
     let recWeight, recReps, note;
     if (top.reps >= repHigh) {
@@ -48,7 +42,16 @@ export function getRecommendation(exerciseId, workouts, unit, excludeWorkoutId, 
       recReps = Math.min(top.reps + 1, repHigh);
       note = recReps > top.reps ? "+1 rep" : "hold steady";
     }
-    return { basedOn: dateKey, lastWeight: top.weight, lastReps: top.reps, recWeight, recReps, note };
+    return {
+      basedOn: dateKey,
+      lastWeight: top.weight,
+      lastReps: top.reps,
+      recWeight,
+      recReps,
+      note,
+      side: firstSet.side ?? "both",
+      warmup: firstSet.warmup ?? false,
+    };
   }
   return null;
 }

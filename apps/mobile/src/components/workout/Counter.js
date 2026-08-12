@@ -39,6 +39,14 @@ export const Counter = forwardRef(function Counter({ label, value, onInc, onDec,
     onChangeValue(t);
   };
 
+  // Strips formatting quirks (leading zeros, trailing zeros after a decimal)
+  // once the user is done editing, by resyncing to the canonical `String(value)`
+  // — skipped if `text` doesn't actually parse to `value` (e.g. empty input),
+  // same guard as the `value`-driven resync above.
+  const handleBlur = () => {
+    if (parseFloat(text) === value) setText(String(value));
+  };
+
   const ValueWrapper = onPress ? Pressable : View;
 
   return (
@@ -62,9 +70,9 @@ export const Counter = forwardRef(function Counter({ label, value, onInc, onDec,
           keyboardType="decimal-pad"
           value={text}
           onChangeText={handleChangeText}
+          onBlur={handleBlur}
           editable={!onPress}
           pointerEvents={onPress ? "none" : "auto"}
-          selectTextOnFocus
           className="w-full text-center"
           style={{ fontSize: COUNTER_VALUE_FONT_SIZE[size], fontWeight: "700", color: tokens.text, fontVariant: ["tabular-nums"], padding: 0 }}
         />

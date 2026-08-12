@@ -10,7 +10,7 @@ import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
 export function RoutinesView({
-  routines, exercises, onCreate, onDelete, onOpenRoutine, onAddCustomExercise, stretchRoutinesEnabled, onImportRoutine,
+  routines, exercises, onCreate, onDelete, onOpenRoutine, onAddCustomExercise, onImportRoutine,
 }) {
   const { tokens } = useTheme();
   const [showBuilder, setShowBuilder] = useState(false);
@@ -65,7 +65,6 @@ export function RoutinesView({
             setShowBuilder(false);
           }}
           onAddCustomExercise={onAddCustomExercise}
-          stretchRoutinesEnabled={stretchRoutinesEnabled}
         />
       )}
 

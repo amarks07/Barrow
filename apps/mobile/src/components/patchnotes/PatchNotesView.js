@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react-native";
 import { IconBtn } from "../ui/IconBtn";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
-import { PATCH_NOTES } from "../../content/patchNotes";
+import { PATCH_NOTES, formatPatchNoteDate } from "../../content/patchNotes";
 import { NoteList } from "./NoteList";
 
 // Full history of PATCH_NOTES entries, newest first — reachable any time
@@ -32,7 +32,12 @@ export function PatchNotesView({ onBack }) {
           <View key={entry.version} className={i === PATCH_NOTES.length - 1 ? "" : "mb-7"}>
             <View className="flex-row items-baseline justify-between mb-2">
               <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 16, color: tokens.text }}>{entry.title}</Text>
-              <Text style={{ fontSize: 12, color: tokens.textDim }}>v{entry.version}</Text>
+              <View className="items-end">
+                <Text style={{ fontSize: 12, color: tokens.textDim }}>v{entry.version}</Text>
+                {entry.date ? (
+                  <Text style={{ fontSize: 11, color: tokens.textDim }}>{formatPatchNoteDate(entry.date)}</Text>
+                ) : null}
+              </View>
             </View>
             <NoteList notes={entry.notes} tokens={tokens} />
           </View>

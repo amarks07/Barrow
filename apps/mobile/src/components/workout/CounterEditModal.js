@@ -33,10 +33,18 @@ export function CounterEditModal({ title, label, value, onChangeValue, onInc, on
   // silently ignored on iOS (a view has to actually be on-screen to become
   // first responder). Focusing only once the slide-in finishes is what
   // actually raises the keyboard.
+  //
+  // setSelection right after is a one-shot, imperative select-all for this
+  // initial focus only — deliberately not `selectTextOnFocus` (a declarative
+  // prop that would re-select on every focus this input receives, including
+  // the defensive refocus calls below and WeightToolbar's focusInput(),
+  // fighting the user's own selection/cursor mid-edit).
   useEffect(() => {
     Animated.timing(slideAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => {
       inputRef.current?.focus();
+      inputRef.current?.setSelection(0, String(value).length);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideAnim]);
 
   // The parent unmounts this whole component (Modal included) the instant

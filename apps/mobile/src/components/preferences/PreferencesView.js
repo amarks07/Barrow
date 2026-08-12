@@ -97,14 +97,14 @@ function AccentColorPicker({ accentColor, onAccentColorChange, tokens }) {
 
 const WORKOUT_VIEW_OPTIONS = [
   {
-    value: "classic",
-    label: "Classic",
-    description: "Tap an exercise to expand it in place and log sets right there in the list.",
-  },
-  {
     value: "focus",
     label: "Focus",
     description: "Tap an exercise to open it full-screen. Swipe or use the arrows to move through the workout one exercise (or superset) at a time.",
+  },
+  {
+    value: "classic",
+    label: "List",
+    description: "Tap an exercise to expand it in place and log sets right there in the list.",
   },
 ];
 
@@ -304,8 +304,8 @@ export function PreferencesView({
                 <View className="flex-1">
                   <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>Enable stretch routines</Text>
                   <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2, lineHeight: 16 }}>
-                    Adds a Stretches tab where you can build a named list of poses, each with its own hold time, then add it to
-                    the end of a routine or workout like any other exercise.
+                    Adds a Stretches tab where you can build a named list of poses, each with its own hold time, then run
+                    through it and start the countdowns.
                   </Text>
                 </View>
                 <Switch

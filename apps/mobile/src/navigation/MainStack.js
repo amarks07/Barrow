@@ -7,6 +7,7 @@ import { ExerciseFocusScreen } from "../screens/workout/ExerciseFocusScreen";
 import { WorkoutSummaryScreen } from "../screens/workout/WorkoutSummaryScreen";
 import { HistoryScreen } from "../screens/history/HistoryScreen";
 import { RoutineDetailScreen } from "../screens/routines/RoutineDetailScreen";
+import { StretchRoutineDetailScreen } from "../screens/stretches/StretchRoutineDetailScreen";
 import { withKeyboardAvoiding } from "./withKeyboardAvoiding";
 import { useAppState } from "../state/AppStateProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -60,6 +61,11 @@ export function MainStack({ navigation }) {
         <Stack.Screen name="Day" component={KeyboardAvoidingDay} options={{ presentation: "modal" }} />
         <Stack.Screen name="History" component={KeyboardAvoidingHistory} />
         <Stack.Screen name="RoutineDetail" component={KeyboardAvoidingRoutineDetail} />
+        {/* No withKeyboardAvoiding: the only text input here lives inside
+            StretchRoutineModal, which already wraps itself in its own
+            KeyboardAvoidingView (see that file) — same reasoning as
+            ExerciseFocus below. */}
+        <Stack.Screen name="StretchRoutineDetail" component={StretchRoutineDetailScreen} />
         {/* Read-only recap, no text inputs — no withKeyboardAvoiding needed
             (same reasoning as ExerciseFocus below). Modal presentation so it
             reads as a "workout finished" moment whether it's pushed from

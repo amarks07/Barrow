@@ -111,6 +111,7 @@ export function ExerciseFocusScreen({ route, navigation }) {
       onUpdateSet={workoutActions.onUpdateSet}
       onRemoveSet={workoutActions.onRemoveSet}
       onSetEntryNote={workoutActions.onSetEntryNote}
+      onOpenHistory={(exerciseId) => navigation.navigate("History", { exerciseId })}
       onStepChange={onStepChange}
       groupSupersets={focusSupersetGrouping !== "separate"}
       focusSetId={focusSetId}

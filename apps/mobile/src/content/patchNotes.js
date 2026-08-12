@@ -3,7 +3,8 @@ import appJson from "../../app.json";
 // Release notes for the "what's new" popup (see usePatchNotes/PatchNotesModal)
 // and the "Patch notes" button in Preferences, which shows this whole list.
 // Newest first. Add a new entry — keyed by the exact app.json `expo.version`
-// string — on any release with user-facing changes; usePatchNotes diffs
+// string, with a `date` ("YYYY-MM-DD") for the day it shipped — on any
+// release with user-facing changes; usePatchNotes diffs
 // CURRENT_VERSION against the last version a user dismissed the popup for
 // to decide whether to show it. A version bump with no matching entry here
 // just won't trigger the popup, rather than showing something stale or blank.
@@ -14,14 +15,56 @@ import appJson from "../../app.json";
 // be the longest list; other categories are just flat string arrays.
 export const PATCH_NOTES = [
   {
+    version: "1.2.2",
+    date: "2026-08-12",
+    title: "Stretch run screen, widget polish, and fixes",
+    notes: {
+      features: [
+        {
+          section: "Patch notes",
+          items: ["Patch notes now show the release date next to each entry."],
+        },
+        {
+          section: "Preferences",
+          items: [
+            "Renamed the Classic workout view to List, and made Focus the default.",
+            "Exercise Focus view now has a History button next to notes, matching List view.",
+          ],
+        },
+        {
+          section: "Stretch routines",
+          items: [
+            "Stretch routines now open a dedicated run screen with poses and countdowns front and center — tap the pencil there to edit.",
+          ],
+        },
+      ],
+      styling: [
+        "New app icon and logo.",
+        "Widget buttons and text are bigger and easier to tap, and refreshing now shows a brief status instead of flashing.",
+        "Premium buttons now show a sparkle icon.",
+      ],
+      fixes: [
+        "Fixed new sets started from a recommendation not carrying over the warmup/side of the set it was based on.",
+        "Fixed number fields leaving stray leading or trailing characters after typing.",
+        "Fixed small gaps in the connector line between grouped (superset) exercises.",
+        "Removed swipe-to-delete on sets — delete with the trash button to avoid accidental removals.",
+      ],
+    },
+  },
+  {
     version: "1.2.1",
+    date: "2026-08-10",
     title: "Cloud backup fix",
     notes: {
-      fixes: ["Fixed cloud backup not working in installed builds (it only worked in local dev).", "Fixed an issue where the user could not sign in to their account."],
+      fixes: [
+        "Fixed cloud backup not working in installed builds (it only worked in local dev).",
+        "Fixed an issue where the user could not sign in to their account.",
+      ],
     },
   },
   {
     version: "1.2.0",
+    date: "2026-08-10",
     title: "Routines, stretching, and profile pictures",
     notes: {
       features: [
@@ -34,7 +77,9 @@ export const PATCH_NOTES = [
         },
         {
           section: "Navigation",
-          items: ["You can now swipe left/right between days instead of only using the calendar."],
+          items: [
+            "You can now swipe left/right between days instead of only using the calendar.",
+          ],
         },
         {
           section: "Sign in & account",
@@ -56,6 +101,7 @@ export const PATCH_NOTES = [
   },
   {
     version: "1.1.0",
+    date: "2026-08-07",
     title: "Widgets, history charts, and workout notes",
     notes: {
       features: [
@@ -85,6 +131,7 @@ export const PATCH_NOTES = [
   },
   {
     version: "1.0.0",
+    date: "2026-08-05",
     title: "Welcome to Barrow",
     notes: {
       features: [
@@ -110,11 +157,15 @@ export const PATCH_NOTES = [
         },
         {
           section: "History",
-          items: ["See workout history per exercise, with a volume chart over time and a calendar of workout days."],
+          items: [
+            "See workout history per exercise, with a volume chart over time and a calendar of workout days.",
+          ],
         },
         {
           section: "Sign in & account",
-          items: ["Sign in and back up your data to the cloud, with password reset support."],
+          items: [
+            "Sign in and back up your data to the cloud, with password reset support.",
+          ],
         },
         {
           section: "Preferences",
@@ -125,6 +176,19 @@ export const PATCH_NOTES = [
   },
 ];
 
+// `date` is the release day, "YYYY-MM-DD". Formatted with UTC getters since
+// a date-only ISO string parses as UTC midnight — reading it back with local
+// getters can roll it to the previous day west of UTC.
+export function formatPatchNoteDate(date) {
+  const d = new Date(date);
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 // Section order + labels shared by PatchNotesView and PatchNotesModal.
 export const PATCH_NOTE_CATEGORIES = [
   { key: "features", label: "New features" },
@@ -134,4 +198,5 @@ export const PATCH_NOTE_CATEGORIES = [
 
 export const CURRENT_VERSION = appJson.expo.version;
 
-export const CURRENT_PATCH_NOTES = PATCH_NOTES.find((entry) => entry.version === CURRENT_VERSION) || null;
+export const CURRENT_PATCH_NOTES =
+  PATCH_NOTES.find((entry) => entry.version === CURRENT_VERSION) || null;

@@ -6,6 +6,7 @@ import {
   focusRemoveSet,
   focusNavigateStep,
   focusToggleWarmup,
+  focusScrollSets,
 } from "@barrow/core";
 import { asyncStorageAdapter } from "../state/storage";
 import { readExercises, readUnit, readTheme, readAccentColor } from "../state/focusReaders";
@@ -20,6 +21,15 @@ import { FocusWidget } from "./FocusWidget";
 
 const REP_STEP = 1;
 const WEIGHT_STEP = 5;
+
+// REFRESH_WIDGET's own read is effectively instant (a couple of AsyncStorage
+// gets), so without this delay the "Refreshing…" state would flash for a
+// single frame instead of being readable.
+const REFRESH_LABEL_VISIBLE_MS = 600;
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export async function focusWidgetTaskHandler(props) {
   const { widgetAction, clickAction, clickActionData, renderWidget } = props;
@@ -62,8 +72,16 @@ export async function focusWidgetTaskHandler(props) {
       case "NEXT_STEP":
         snapshot = await focusNavigateStep(asyncStorageAdapter, exercises, 1);
         break;
+      case "SCROLL_UP":
+        snapshot = await focusScrollSets(asyncStorageAdapter, exercises, -1);
+        break;
+      case "SCROLL_DOWN":
+        snapshot = await focusScrollSets(asyncStorageAdapter, exercises, 1);
+        break;
       case "REFRESH_WIDGET":
         snapshot = await readFocusSnapshot(asyncStorageAdapter, exercises);
+        renderWidget(<FocusWidget snapshot={snapshot} unit={unit} theme={theme} accentColor={accentColor} refreshing />);
+        await wait(REFRESH_LABEL_VISIBLE_MS);
         break;
       default:
         snapshot = await readFocusSnapshot(asyncStorageAdapter, exercises);

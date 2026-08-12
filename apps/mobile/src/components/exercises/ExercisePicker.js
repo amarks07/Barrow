@@ -16,12 +16,10 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 
 // Used by the day view (add/swap an exercise) and the routine builder.
 // `onAddCustom`, when passed, shows a FAB to define and immediately pick a
-// custom exercise without leaving the picker. Stretch routines are built
-// and edited exclusively from their own Stretches tab (see
-// StretchRoutinesView) — this picker only ever lets you pick an *existing*
-// one, and only when `stretchRoutinesEnabled` is true (the preferences
-// toggle gating the whole feature), so they're excluded from the pickable
-// list entirely while it's off. Presented as a full-screen Modal so any
+// custom exercise without leaving the picker. Stretch routines are run
+// straight from their own Stretches tab (see StretchRoutineDetailView), not
+// pulled into a workout/routine as an exercise, so they're excluded from
+// the pickable list entirely here. Presented as a full-screen Modal so any
 // screen can pop it up ad hoc, matching the web app's absolute-inset
 // overlay pattern.
 export function ExercisePicker({
@@ -32,7 +30,6 @@ export function ExercisePicker({
   onUnpick,
   onClose,
   onAddCustom,
-  stretchRoutinesEnabled = false,
   alreadyPicked = [],
   title = "Choose exercise",
   doneLabel,
@@ -43,7 +40,7 @@ export function ExercisePicker({
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showAddCustom, setShowAddCustom] = useState(false);
 
-  const pickableExercises = stretchRoutinesEnabled ? exercises : exercises.filter((e) => e.type !== "stretch");
+  const pickableExercises = exercises.filter((e) => e.type !== "stretch");
   const filtered = pickableExercises.filter(
     (e) => e.name.toLowerCase().includes(query.toLowerCase()) && (categoryFilter === "all" || e.category === categoryFilter)
   );

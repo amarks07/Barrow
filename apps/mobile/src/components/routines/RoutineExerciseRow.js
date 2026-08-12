@@ -107,7 +107,15 @@ export function RoutineExerciseRow({
                 <View style={{ position: "absolute", right: 3, top: 0, bottom: "50%", width: 1.5, backgroundColor: tokens.accent }} />
               )}
               {!run.isLast && (
-                <View style={{ position: "absolute", right: 3, top: "50%", bottom: 0, width: 1.5, backgroundColor: tokens.accent }} />
+                // bottom: -8, not 0 — unlike DayView's rows (bordered, no
+                // gap between them), each row here is its own Card with an
+                // 8px `mb-2` margin-bottom to the next one. bottom: 0 left
+                // that whole gap with no line drawn across it at all. -8
+                // reaches through the gap to the next row's card, which
+                // starts its own top segment at top: 0 — there's no
+                // margin-top on that side to also cross, so this alone
+                // closes it.
+                <View style={{ position: "absolute", right: 3, top: "50%", bottom: -8, width: 1.5, backgroundColor: tokens.accent }} />
               )}
               <View
                 style={{

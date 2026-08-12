@@ -7,24 +7,23 @@ import { StretchRoutineModal } from "./StretchRoutineModal";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
-// The Stretches tab: full CRUD home for stretch routines (a named, ordered
-// list of poses each with its own hold time). Kept off the regular
-// Exercises tab and out of ExercisePicker's creation flow entirely — this
-// is the one place they're built and edited, mirroring how Routines gets
-// its own tab even though a routine is "just" a list of exercise ids.
-export function StretchRoutinesView({ stretchRoutines, onCreate, onUpdate, onDelete }) {
+// The Stretches tab: browse/create home for stretch routines (a named,
+// ordered list of poses each with its own hold time). Tapping a routine
+// navigates into StretchRoutineDetailView to actually run its countdowns —
+// editing happens from a pencil button there, not from tapping the card
+// here. Kept off the regular Exercises tab and out of ExercisePicker
+// entirely: a stretch routine isn't an exercise you pull into a workout.
+export function StretchRoutinesView({ stretchRoutines, onCreate, onOpenRoutine, onDelete }) {
   const { tokens } = useTheme();
   const [showCreate, setShowCreate] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const editing = editingId ? stretchRoutines.find((r) => r.id === editingId) : null;
 
   return (
     <View className="flex-1">
       <View className="px-5 pt-5 pb-3">
         <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: tokens.text }}>Stretches</Text>
         <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 4, lineHeight: 16 }}>
-          A stretch routine is a named list of poses, each with its own hold time — add one to the end of a routine or
-          workout just like any other exercise.
+          A stretch routine is a named list of poses, each with its own hold time — tap one to run through it and start
+          the countdowns.
         </Text>
       </View>
       <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ gap: 8, paddingBottom: 88 }}>
@@ -34,7 +33,7 @@ export function StretchRoutinesView({ stretchRoutines, onCreate, onUpdate, onDel
           </Text>
         )}
         {stretchRoutines.map((r) => (
-          <Pressable key={r.id} onPress={() => setEditingId(r.id)}>
+          <Pressable key={r.id} onPress={() => onOpenRoutine(r.id)}>
             <Card style={{ padding: 16, position: "relative" }}>
               <View style={{ paddingRight: 32 }}>
                 <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }} className="mb-1">
@@ -63,17 +62,6 @@ export function StretchRoutinesView({ stretchRoutines, onCreate, onUpdate, onDel
           onSave={(name, stretches) => {
             onCreate(name, stretches);
             setShowCreate(false);
-          }}
-        />
-      )}
-
-      {editing && (
-        <StretchRoutineModal
-          initial={editing}
-          onClose={() => setEditingId(null)}
-          onSave={(name, stretches) => {
-            onUpdate(editing.id, name, stretches);
-            setEditingId(null);
           }}
         />
       )}

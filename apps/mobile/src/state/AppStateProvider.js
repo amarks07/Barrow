@@ -55,7 +55,7 @@ export function AppStateProvider({ children }) {
   const [unit, setUnit] = usePersistedState("barrow:unit", "lb", RAW_CODEC);
   const [theme, setTheme] = usePersistedState("barrow:theme", "system", RAW_CODEC);
   const [accentColor, setAccentColor] = usePersistedState("barrow:accentColor", DEFAULT_ACCENT, RAW_CODEC);
-  const [workoutView, setWorkoutView] = usePersistedState("barrow:workoutView", "classic", RAW_CODEC);
+  const [workoutView, setWorkoutView] = usePersistedState("barrow:workoutView", "focus", RAW_CODEC);
   const [focusSupersetGrouping, setFocusSupersetGrouping] = usePersistedState(
     "barrow:focusSupersetGrouping",
     "together",

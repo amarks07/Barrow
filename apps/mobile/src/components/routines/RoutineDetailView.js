@@ -17,7 +17,7 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 
 export function RoutineDetailView({
   routine, exercises, workouts, onBack, onDelete, onRename, onSelectDate,
-  onAddExercise, onRemoveExercise, onAddCustomExercise, stretchRoutinesEnabled, onReorderExercise, onCreateSuperset, onUngroupSuperset,
+  onAddExercise, onRemoveExercise, onAddCustomExercise, onReorderExercise, onCreateSuperset, onUngroupSuperset,
 }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -191,7 +191,6 @@ export function RoutineDetailView({
           onUnpick={(ex) => onRemoveExercise(routine.id, ex.id)}
           onClose={() => setShowPicker(false)}
           onAddCustom={onAddCustomExercise}
-          stretchRoutinesEnabled={stretchRoutinesEnabled}
           doneLabel="Done"
         />
       )}
