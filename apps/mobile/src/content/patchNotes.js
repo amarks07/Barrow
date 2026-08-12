@@ -19,31 +19,16 @@ export const PATCH_NOTES = [
     date: "2026-08-12",
     title: "Stretch run screen, widget polish, and fixes",
     notes: {
-      features: [
-        {
-          section: "Patch notes",
-          items: ["Patch notes now show the release date next to each entry."],
-        },
-        {
-          section: "Preferences",
-          items: [
-            "Renamed the Classic workout view to List, and made Focus the default.",
-            "Exercise Focus view now has a History button next to notes, matching List view.",
-          ],
-        },
-        {
-          section: "Stretch routines",
-          items: [
-            "Stretch routines now open a dedicated run screen with poses and countdowns front and center — tap the pencil there to edit.",
-          ],
-        },
-      ],
       styling: [
         "New app icon and logo.",
         "Widget buttons and text are bigger and easier to tap, and refreshing now shows a brief status instead of flashing.",
         "Premium buttons now show a sparkle icon.",
       ],
       fixes: [
+        "Patch notes now show the release date next to each entry.",
+        "Renamed the Classic workout view to List, and made Focus the default.",
+        "Exercise Focus view now has a History button next to notes, matching List view.",
+        "Stretch routines now open a dedicated run screen with poses and countdowns front and center — tap the pencil there to edit.",
         "Fixed new sets started from a recommendation not carrying over the warmup/side of the set it was based on.",
         "Fixed number fields leaving stray leading or trailing characters after typing.",
         "Fixed small gaps in the connector line between grouped (superset) exercises.",
