@@ -21,6 +21,7 @@ import { AppStateProvider, useAppState } from "./src/state/AppStateProvider";
 import { ResetPasswordModal } from "./src/components/profile/ResetPasswordModal";
 import { BiometricPromptModal } from "./src/components/profile/BiometricPromptModal";
 import { ReauthModal } from "./src/components/profile/ReauthModal";
+import { ConfirmActionModal } from "./src/components/ui/ConfirmActionModal";
 import { ProfileOnboardingModal } from "./src/components/profile/ProfileOnboardingModal";
 import { PatchNotesModal } from "./src/components/patchnotes/PatchNotesModal";
 import { WorkoutTimerBadge } from "./src/components/workout/WorkoutTimerBadge";
@@ -52,7 +53,7 @@ function AppStatusBar() {
 // update that shipped a new patchNotes.js entry) — same always-on-top
 // behavior as the web app's z-50 overlay.
 function ThemedApp() {
-  const { theme, accentColor, cloudSync, focusNotificationEnabled, profile, profileHydrated, updateProfile } =
+  const { theme, accentColor, cloudSync, focusNotificationEnabled, profile, profileHydrated, updateProfile, activeAccountId } =
     useAppState();
   useFocusNotificationNavigation();
   useFocusWidgetDeepLink();
@@ -68,7 +69,7 @@ function ThemedApp() {
         // catch on its own since a fresh launch has no prior state to
         // transition from.
         onReady={() => {
-          clearStaleFocusPointer(focusNotificationEnabled).catch((e) =>
+          clearStaleFocusPointer(focusNotificationEnabled, activeAccountId).catch((e) =>
             console.error("Barrow: failed to clear stale barrow:focusPointer", e)
           );
         }}
@@ -78,6 +79,18 @@ function ThemedApp() {
       {cloudSync.recoveryMode && <ResetPasswordModal cloudSync={cloudSync} />}
       {cloudSync.biometricPromptVisible && <BiometricPromptModal cloudSync={cloudSync} />}
       {cloudSync.reauthPromptVisible && <ReauthModal cloudSync={cloudSync} />}
+      {cloudSync.accountConflictVisible && (
+        <ConfirmActionModal
+          title="Data on this device"
+          message={`This device has workout data that isn't saved to any account. ${
+            cloudSync.conflictAccountEmail ? `Signing in as ${cloudSync.conflictAccountEmail}` : "Signing in"
+          } will replace it with that account's own data. Keep this data instead by cancelling and creating an account for it.`}
+          confirmLabel="Replace"
+          cancelLabel="Keep my data"
+          onConfirm={() => cloudSync.resolveAccountConflict("replace")}
+          onClose={() => cloudSync.resolveAccountConflict("cancel")}
+        />
+      )}
       {profileOnboarding.visible && (
         <ProfileOnboardingModal
           profile={profile}

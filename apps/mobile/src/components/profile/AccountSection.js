@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Text, View } from "react-native";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 import { Button } from "../ui/Button";
+import { ConfirmActionModal } from "../ui/ConfirmActionModal";
 
 // Signed-in identity (username/email + sign out), split out from
 // CloudBackupSection so "who am I signed in as" isn't tied to backup/
@@ -11,18 +13,34 @@ import { Button } from "../ui/Button";
 export function AccountSection({ cloudSync, profile }) {
   const { tokens } = useTheme();
   const { session, signOut } = cloudSync;
+  const [confirming, setConfirming] = useState(false);
 
   if (!session) return null;
 
   return (
-    <View className="mt-6 pt-6 flex-row items-center justify-between" style={{ borderTopWidth: 1.5, borderTopColor: tokens.line }}>
-      <View style={{ flex: 1 }} className="pr-3">
-        <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 13, textTransform: "uppercase", color: tokens.textDim }} className="mb-1">
-          Account
-        </Text>
-        <Text style={{ fontSize: 13, color: tokens.text }}>Signed in as {profile.username || session.user.email}</Text>
+    <>
+      <View className="mt-6 pt-6 flex-row items-center justify-between" style={{ borderTopWidth: 1.5, borderTopColor: tokens.line }}>
+        <View style={{ flex: 1 }} className="pr-3">
+          <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 13, textTransform: "uppercase", color: tokens.textDim }} className="mb-1">
+            Account
+          </Text>
+          <Text style={{ fontSize: 13, color: tokens.text }}>Signed in as {profile.username || session.user.email}</Text>
+        </View>
+        <Button label="Sign out" onPress={() => setConfirming(true)} />
       </View>
-      <Button label="Sign out" onPress={signOut} />
-    </View>
+
+      {confirming && (
+        <ConfirmActionModal
+          title="Sign out"
+          message="You'll need to sign in again to sync your data across devices. Data already on this device isn't affected."
+          confirmLabel="Sign out"
+          onConfirm={async () => {
+            await signOut();
+            setConfirming(false);
+          }}
+          onClose={() => setConfirming(false)}
+        />
+      )}
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import {
   usePersistedState,
@@ -11,6 +11,7 @@ import {
   generateId,
 } from "@barrow/core";
 import { asyncStorageAdapter } from "./storage";
+import { getActiveAccountId, setActiveAccountId, namespacedKey } from "./accountNamespace";
 import { DEFAULT_ACCENT } from "../theme/accentPalette";
 import { useCloudSync } from "../hooks/useCloudSync";
 import { refreshFocusWidget } from "../widget/refreshFocusWidget";
@@ -49,48 +50,67 @@ const DEFAULT_PROFILE = {
 // than global state, so Day/ExerciseFocus screens (Phase 3) build it
 // themselves from useAppState() + their own route.params.
 export function AppStateProvider({ children }) {
-  const [exercises, setExercises] = usePersistedState("barrow:exercises", SEED_EXERCISES, EXERCISES_CODEC);
-  const [routines, setRoutines] = usePersistedState("barrow:routines", [], { ...JSON_CODEC, legacyKey: "barrow:templates" });
-  const [workouts, setWorkouts] = usePersistedState("barrow:workouts", {}, WORKOUTS_CODEC);
-  const [unit, setUnit] = usePersistedState("barrow:unit", "lb", RAW_CODEC);
-  const [theme, setTheme] = usePersistedState("barrow:theme", "system", RAW_CODEC);
-  const [accentColor, setAccentColor] = usePersistedState("barrow:accentColor", DEFAULT_ACCENT, RAW_CODEC);
-  const [workoutView, setWorkoutView] = usePersistedState("barrow:workoutView", "focus", RAW_CODEC);
-  const [focusSupersetGrouping, setFocusSupersetGrouping] = usePersistedState(
-    "barrow:focusSupersetGrouping",
+  // Which account's local cache is active — null means the guest bucket
+  // (the bare "barrow:*" keys every install already used before this
+  // feature existed, so nothing needs migrating). Starts null and is
+  // corrected moments later once the persisted pointer resolves; the
+  // usePersistedState key-change-reset fix (packages/core) makes that
+  // brief guest->real-account key swap on cold start safe rather than a
+  // race. switchActiveAccount (passed to useCloudSync below) is the only
+  // way this changes after mount.
+  const [activeAccountId, setActiveAccountIdState] = useState(null);
+  useEffect(() => {
+    getActiveAccountId().then(setActiveAccountIdState);
+  }, []);
+  const k = (name) => namespacedKey(name, activeAccountId);
+
+  const [exercises, setExercises, exercisesHydrated] = usePersistedState(k("barrow:exercises"), SEED_EXERCISES, EXERCISES_CODEC);
+  const [routines, setRoutines, routinesHydrated] = usePersistedState(k("barrow:routines"), [], {
+    ...JSON_CODEC,
+    // Only meaningful for the guest bucket — an account namespace never had
+    // a pre-rename "templates" key of its own.
+    legacyKey: activeAccountId ? undefined : "barrow:templates",
+  });
+  const [workouts, setWorkouts, workoutsHydrated] = usePersistedState(k("barrow:workouts"), {}, WORKOUTS_CODEC);
+  const [unit, setUnit, unitHydrated] = usePersistedState(k("barrow:unit"), "lb", RAW_CODEC);
+  const [theme, setTheme, themeHydrated] = usePersistedState(k("barrow:theme"), "system", RAW_CODEC);
+  const [accentColor, setAccentColor, accentColorHydrated] = usePersistedState(k("barrow:accentColor"), DEFAULT_ACCENT, RAW_CODEC);
+  const [workoutView, setWorkoutView, workoutViewHydrated] = usePersistedState(k("barrow:workoutView"), "focus", RAW_CODEC);
+  const [focusSupersetGrouping, setFocusSupersetGrouping, focusSupersetGroupingHydrated] = usePersistedState(
+    k("barrow:focusSupersetGrouping"),
     "together",
     RAW_CODEC
   );
-  const [profile, setProfile, profileHydrated] = usePersistedState("barrow:profile", DEFAULT_PROFILE, JSON_CODEC);
+  const [profile, setProfile, profileHydrated] = usePersistedState(k("barrow:profile"), DEFAULT_PROFILE, JSON_CODEC);
   const updateProfile = (field, value) => setProfile((p) => ({ ...p, [field]: value }));
-  const [focusNotificationEnabled, setFocusNotificationEnabled] = usePersistedState(
-    "barrow:focusNotificationEnabled",
+  const [focusNotificationEnabled, setFocusNotificationEnabled, focusNotificationEnabledHydrated] = usePersistedState(
+    k("barrow:focusNotificationEnabled"),
     "off",
     RAW_CODEC
   );
-  const [plateCalculatorEnabled, setPlateCalculatorEnabled] = usePersistedState(
-    "barrow:plateCalculatorEnabled",
+  const [plateCalculatorEnabled, setPlateCalculatorEnabled, plateCalculatorEnabledHydrated] = usePersistedState(
+    k("barrow:plateCalculatorEnabled"),
     false,
     JSON_CODEC
   );
-  const [stretchRoutinesEnabled, setStretchRoutinesEnabled] = usePersistedState(
-    "barrow:stretchRoutinesEnabled",
+  const [stretchRoutinesEnabled, setStretchRoutinesEnabled, stretchRoutinesEnabledHydrated] = usePersistedState(
+    k("barrow:stretchRoutinesEnabled"),
     false,
     JSON_CODEC
   );
   // Whether the Start/End workout timer control is turned on at all — the
   // preference itself, distinct from whether a timer is currently running
   // (see workoutTimerStartedAt below).
-  const [workoutTimerEnabled, setWorkoutTimerEnabled] = usePersistedState(
-    "barrow:workoutTimerEnabled",
+  const [workoutTimerEnabled, setWorkoutTimerEnabled, workoutTimerEnabledHydrated] = usePersistedState(
+    k("barrow:workoutTimerEnabled"),
     false,
     JSON_CODEC
   );
   // Sub-option of the timer above: whether ending the timer also jumps
   // straight to that workout's summary. Defaults on to match the timer's
   // original (non-optional) behavior before this toggle existed.
-  const [workoutTimerAutoOpenSummary, setWorkoutTimerAutoOpenSummary] = usePersistedState(
-    "barrow:workoutTimerAutoOpenSummary",
+  const [workoutTimerAutoOpenSummary, setWorkoutTimerAutoOpenSummary, workoutTimerAutoOpenSummaryHydrated] = usePersistedState(
+    k("barrow:workoutTimerAutoOpenSummary"),
     true,
     JSON_CODEC
   );
@@ -100,11 +120,70 @@ export function AppStateProvider({ children }) {
   // with its correct elapsed time, on relaunch. Set/cleared directly by
   // WorkoutTimerControl's Start/End actions in Day and Focus view, not by
   // the preference toggle above.
-  const [workoutTimerStartedAt, setWorkoutTimerStartedAt] = usePersistedState(
-    "barrow:workoutTimerStartedAt",
+  const [workoutTimerStartedAt, setWorkoutTimerStartedAt, workoutTimerStartedAtHydrated] = usePersistedState(
+    k("barrow:workoutTimerStartedAt"),
     null,
     JSON_CODEC
   );
+  // The header's countdown timer button (AppHeader/CountdownButton), next
+  // to Preferences — unlike the workout timer above, always available, no
+  // enabled/disabled preference gating it. countdownDurationMs is the last
+  // duration the user set (prefills the modal next time it's opened);
+  // countdownEndAt is the fixed timestamp (ms) the running countdown ends
+  // at, or null when idle — persisted, not a plain useState, so a countdown
+  // started before the app is backgrounded/killed keeps counting down
+  // accurately (or is correctly reported as finished) on relaunch, same
+  // reasoning as workoutTimerStartedAt.
+  const [countdownDurationMs, setCountdownDurationMs, countdownDurationMsHydrated] = usePersistedState(
+    k("barrow:countdownDurationMs"),
+    5 * 60 * 1000,
+    JSON_CODEC
+  );
+  const [countdownEndAt, setCountdownEndAt, countdownEndAtHydrated] = usePersistedState(k("barrow:countdownEndAt"), null, JSON_CODEC);
+  // Remaining ms frozen at the moment of pausing, or null when not paused —
+  // mutually exclusive with countdownEndAt (running always clears this,
+  // pausing always clears that) rather than a separate boolean flag, so
+  // there's no third piece of state that could drift out of sync with the
+  // other two.
+  const [countdownPausedMs, setCountdownPausedMs, countdownPausedMsHydrated] = usePersistedState(
+    k("barrow:countdownPausedMs"),
+    null,
+    JSON_CODEC
+  );
+
+  // AND of every slice above — true once a namespace switch (or the
+  // initial mount) has fully settled, so useCloudSync knows it's safe to
+  // read exercises/routines/workouts/profile for a merge/push rather than
+  // catching them mid-reload for a namespace that just changed.
+  const localDataHydrated =
+    exercisesHydrated &&
+    routinesHydrated &&
+    workoutsHydrated &&
+    unitHydrated &&
+    themeHydrated &&
+    accentColorHydrated &&
+    workoutViewHydrated &&
+    focusSupersetGroupingHydrated &&
+    profileHydrated &&
+    focusNotificationEnabledHydrated &&
+    plateCalculatorEnabledHydrated &&
+    stretchRoutinesEnabledHydrated &&
+    workoutTimerEnabledHydrated &&
+    workoutTimerAutoOpenSummaryHydrated &&
+    workoutTimerStartedAtHydrated &&
+    countdownDurationMsHydrated &&
+    countdownEndAtHydrated &&
+    countdownPausedMsHydrated;
+
+  // Switches which account's local cache is active: persists the pointer,
+  // then flips React state so every usePersistedState key above recomputes
+  // and reloads from the new namespace (safe thanks to the key-change fix
+  // in packages/core's usePersistedState). Passed into useCloudSync, which
+  // is the only caller — see its own comment for when each case applies.
+  const switchActiveAccount = async (accountId) => {
+    await setActiveAccountId(accountId);
+    setActiveAccountIdState(accountId);
+  };
 
   const nextId = generateId;
 
@@ -130,16 +209,26 @@ export function AppStateProvider({ children }) {
     focusNotificationEnabledRef.current = focusNotificationEnabled;
   }, [focusNotificationEnabled]);
 
+  // Same "read through a ref, not a closure" reasoning as
+  // focusNotificationEnabledRef above — this effect also subscribes once on
+  // mount, so without a ref it would always resync/clear against whichever
+  // namespace was active at that first render, even after switchActiveAccount
+  // moves to a different one later.
+  const activeAccountIdRef = useRef(activeAccountId);
+  useEffect(() => {
+    activeAccountIdRef.current = activeAccountId;
+  }, [activeAccountId]);
+
   useEffect(() => {
     const sub = AppState.addEventListener("change", async (next) => {
       if (next !== "active") return;
       try {
-        const raw = await asyncStorageAdapter.getItem("barrow:workouts");
+        const raw = await asyncStorageAdapter.getItem(namespacedKey("barrow:workouts", activeAccountIdRef.current));
         if (raw) setWorkouts(migrateWorkouts(JSON.parse(raw)));
       } catch (e) {
         console.error("Barrow: failed to resync barrow:workouts on foreground", e);
       }
-      clearStaleFocusPointer(focusNotificationEnabledRef.current).catch((e) =>
+      clearStaleFocusPointer(focusNotificationEnabledRef.current, activeAccountIdRef.current).catch((e) =>
         console.error("Barrow: failed to clear stale barrow:focusPointer", e)
       );
     });
@@ -170,7 +259,7 @@ export function AppStateProvider({ children }) {
   // rather than leaving it up to whatever's showing until the next
   // workouts change would otherwise trigger a refresh.
   useEffect(() => {
-    if (focusNotificationEnabled !== "on") cancelFocusNotification().catch(() => {});
+    if (focusNotificationEnabled !== "on") cancelFocusNotification().catch((e) => console.error("Barrow: failed to cancel focus notification", e));
   }, [focusNotificationEnabled]);
 
   const dayWorkoutsActions = useDayWorkouts({ setWorkouts, nextId });
@@ -205,6 +294,7 @@ export function AppStateProvider({ children }) {
     routines, setRoutines,
     workouts, setWorkouts,
     unit, setUnit,
+    activeAccountId, switchActiveAccount, localDataHydrated,
   });
 
   // Wipes every logged workout, routine, and custom exercise/stretch
@@ -257,6 +347,12 @@ export function AppStateProvider({ children }) {
       setWorkoutTimerAutoOpenSummary,
       workoutTimerStartedAt,
       setWorkoutTimerStartedAt,
+      countdownDurationMs,
+      setCountdownDurationMs,
+      countdownEndAt,
+      setCountdownEndAt,
+      countdownPausedMs,
+      setCountdownPausedMs,
       profile,
       updateProfile,
       profileHydrated,
@@ -267,9 +363,14 @@ export function AppStateProvider({ children }) {
       getOrCreateWorkoutForDate,
       clearWorkoutData,
       cloudSync,
+      // Which account's local cache is active (null = guest bucket) — read
+      // by WorkoutTimerBadge/staleFocusPointer call sites that touch
+      // barrow:focusPointer directly, outside usePersistedState, so they
+      // resolve the same namespace this provider is currently using.
+      activeAccountId,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [exercises, routines, workouts, unit, theme, accentColor, workoutView, focusSupersetGrouping, focusNotificationEnabled, plateCalculatorEnabled, stretchRoutinesEnabled, workoutTimerEnabled, workoutTimerAutoOpenSummary, workoutTimerStartedAt, profile, profileHydrated, cloudSync]
+    [exercises, routines, workouts, unit, theme, accentColor, workoutView, focusSupersetGrouping, focusNotificationEnabled, plateCalculatorEnabled, stretchRoutinesEnabled, workoutTimerEnabled, workoutTimerAutoOpenSummary, workoutTimerStartedAt, countdownDurationMs, countdownEndAt, countdownPausedMs, profile, profileHydrated, cloudSync, activeAccountId]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

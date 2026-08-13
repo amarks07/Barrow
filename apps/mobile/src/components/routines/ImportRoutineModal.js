@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
-import { parseRoutineShare, resolveRoutineShare } from "@barrow/core";
+import { parseRoutineShare, resolveRoutineShare, logError } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
 import { ColorSwitch } from "../ui/ColorSwitch";
@@ -39,6 +39,7 @@ export function ImportRoutineModal({ exercises, onImport, onClose }) {
       setData(parseRoutineShare(raw));
       setError("");
     } catch (e) {
+      logError("routines.import.parse", e);
       setError(e.message);
       setScanAttempt((n) => n + 1);
     }
@@ -52,7 +53,8 @@ export function ImportRoutineModal({ exercises, onImport, onClose }) {
       const file = new File(result.assets[0].uri);
       handlePayload(await file.text());
     } catch (e) {
-      setError(e.message || "Couldn't read that file.");
+      logError("routines.import.pickFile", e);
+      setError("Couldn't read that file. Try again.");
     }
   };
 

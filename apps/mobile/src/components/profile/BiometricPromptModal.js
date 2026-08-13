@@ -44,21 +44,7 @@ export function BiometricPromptModal({ cloudSync }) {
         </Text>
 
         <View className="flex-row items-center justify-between">
-          <Pressable onPress={dismissBiometricPrompt}>
-            <Text
-              style={{
-                fontFamily: FONT_DISPLAY,
-                fontSize: 13,
-                lineHeight: 13,
-                textTransform: "uppercase",
-                includeFontPadding: false,
-                textAlignVertical: "center",
-                color: tokens.textDim,
-              }}
-            >
-              Not now
-            </Text>
-          </Pressable>
+          <Button label="Not now" onPress={dismissBiometricPrompt} size="small" />
           <Button label="Enable" onPress={acceptBiometricPrompt} variant="solid" size="medium" />
         </View>
       </Animated.View>

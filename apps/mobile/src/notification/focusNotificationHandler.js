@@ -1,6 +1,7 @@
 import { EventType } from "@notifee/react-native";
 import { focusNavigateStep } from "@barrow/core";
 import { asyncStorageAdapter } from "../state/storage";
+import { getActiveAccountId, withAccountNamespace } from "../state/accountNamespace";
 import { readExercises } from "../state/focusReaders";
 import { refreshFocusNotification } from "./focusNotification";
 
@@ -13,12 +14,13 @@ export async function focusNotificationBackgroundHandler({ type, detail }) {
   if (type !== EventType.ACTION_PRESS) return;
 
   const actionId = detail.pressAction?.id;
-  const exercises = await readExercises();
+  const storage = withAccountNamespace(asyncStorageAdapter, await getActiveAccountId());
+  const exercises = await readExercises(storage);
 
   if (actionId === "PREV_STEP") {
-    await focusNavigateStep(asyncStorageAdapter, exercises, -1);
+    await focusNavigateStep(storage, exercises, -1);
   } else if (actionId === "NEXT_STEP") {
-    await focusNavigateStep(asyncStorageAdapter, exercises, 1);
+    await focusNavigateStep(storage, exercises, 1);
   } else {
     return;
   }

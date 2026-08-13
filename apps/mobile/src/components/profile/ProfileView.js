@@ -7,6 +7,7 @@ import { IconBtn } from "../ui/IconBtn";
 import { MenuRow } from "../ui/MenuRow";
 import { ProfileSettingsView } from "./ProfileSettingsView";
 import { BiometricsView } from "./BiometricsView";
+import { FriendsView } from "./FriendsView";
 import { AccountSection } from "./AccountSection";
 import { CloudBackupSection } from "./CloudBackupSection";
 import { DangerZoneSection } from "./DangerZoneSection";
@@ -28,7 +29,7 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWorkoutData }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const [page, setPage] = useState("hub"); // "hub" | "settings" | "biometrics"
+  const [page, setPage] = useState("hub"); // "hub" | "settings" | "biometrics" | "friends"
   const [showSignIn, setShowSignIn] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
 
@@ -44,6 +45,9 @@ export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWork
   }
   if (page === "biometrics") {
     return <BiometricsView profile={profile} onUpdate={onUpdate} onBack={() => setPage("hub")} />;
+  }
+  if (page === "friends") {
+    return <FriendsView session={cloudSync.session} profile={profile} onBack={() => setPage("hub")} />;
   }
 
   return (
@@ -74,6 +78,10 @@ export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWork
             <MenuRow label="Profile settings" subtitle="Name, username, email" onPress={() => setPage("settings")} />
           )}
           <MenuRow label="Biometrics" subtitle="Birthday, gender, height, weight" onPress={() => setPage("biometrics")} />
+          {/* Friends need an account to search/request against — same gate as Profile settings above. */}
+          {cloudSync.session && (
+            <MenuRow label="Friends" subtitle="Search, requests, QR code" onPress={() => setPage("friends")} />
+          )}
         </View>
 
         <AccountSection cloudSync={cloudSync} profile={profile} />

@@ -12,6 +12,7 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { asyncStorageAdapter } from "../../state/storage";
+import { namespacedKey } from "../../state/accountNamespace";
 import { navigationRef } from "../../navigation/navigationRef";
 
 const FOCUS_POINTER_KEY = "barrow:focusPointer";
@@ -50,7 +51,8 @@ export function WorkoutTimerBadge() {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
-  const { workoutTimerEnabled, workoutTimerAutoOpenSummary, workoutTimerStartedAt, setWorkoutTimerStartedAt, setWorkouts } = useAppState();
+  const { workoutTimerEnabled, workoutTimerAutoOpenSummary, workoutTimerStartedAt, setWorkoutTimerStartedAt, setWorkouts, activeAccountId } =
+    useAppState();
   const [now, setNow] = useState(Date.now());
   const bottomAnchor = insets.bottom + 20;
 
@@ -82,7 +84,7 @@ export function WorkoutTimerBadge() {
     const endedAt = Date.now();
     setWorkoutTimerStartedAt(null);
     try {
-      const raw = await asyncStorageAdapter.getItem(FOCUS_POINTER_KEY);
+      const raw = await asyncStorageAdapter.getItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountId));
       const pointer = raw ? JSON.parse(raw) : null;
       if (pointer?.dateKey && pointer?.workoutId) {
         setWorkouts((cur) => patchWorkout(cur, pointer.dateKey, pointer.workoutId, { endedAt }));

@@ -19,6 +19,17 @@ export function usePersistedState(
 
   useEffect(() => {
     let cancelled = false;
+    // Reset synchronously (before the async load below) so a `key` change
+    // mid-lifetime (e.g. switching which account's namespace this hook
+    // reads/writes) can never leave `hydrated` sitting `true` from the
+    // previous key — the save effect below only guards on `hydrated`, so
+    // without this reset it would schedule a write of the *old* key's
+    // in-memory value onto the *new* key before this load even resolves.
+    // Every other call site uses a static key and never exercises this
+    // path, so this is a no-op for them (state is already `initialValue`/
+    // not-yet-hydrated on first mount regardless).
+    setHydrated(false);
+    setValue(initialValue);
     (async () => {
       try {
         let saved = await storage.getItem(key);

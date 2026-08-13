@@ -1,5 +1,6 @@
 import { navigationRef } from "../navigation/navigationRef";
 import { asyncStorageAdapter } from "./storage";
+import { namespacedKey } from "./accountNamespace";
 import { refreshFocusWidget } from "../widget/refreshFocusWidget";
 import { refreshFocusNotification } from "../notification/focusNotification";
 
@@ -18,13 +19,14 @@ const FOCUS_POINTER_KEY = "barrow:focusPointer";
 // that lands back on one of those (e.g. via an explicit deep link/
 // notification tap) is a legitimate reason to keep it, so this only ever
 // clears — it never fights a pointer that a real navigation just (re)wrote.
-export async function clearStaleFocusPointer(focusNotificationEnabled) {
+export async function clearStaleFocusPointer(focusNotificationEnabled, activeAccountId) {
   if (!navigationRef.isReady()) return;
   const currentRoute = navigationRef.getCurrentRoute()?.name;
   if (currentRoute === "ExerciseFocus" || currentRoute === "Day") return;
-  const raw = await asyncStorageAdapter.getItem(FOCUS_POINTER_KEY);
+  const key = namespacedKey(FOCUS_POINTER_KEY, activeAccountId);
+  const raw = await asyncStorageAdapter.getItem(key);
   if (!raw) return;
-  await asyncStorageAdapter.removeItem(FOCUS_POINTER_KEY);
+  await asyncStorageAdapter.removeItem(key);
   refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
   if (focusNotificationEnabled === "on") {
     refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));

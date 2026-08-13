@@ -5,7 +5,8 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import * as LocalAuthentication from "expo-local-authentication";
 import { supabase } from "../lib/supabase-client";
-import { migrateWorkouts } from "@barrow/core";
+import { migrateWorkouts, logError } from "@barrow/core";
+import { claimGuestDataForAccount, clearGuestData } from "../state/accountNamespace";
 
 const DEBOUNCE_MS = 1500;
 const BIOMETRIC_KEY = "barrow:biometricEnabled";
@@ -16,7 +17,8 @@ const BIOMETRIC_ASKED_KEY = "barrow:biometricAsked";
 // essentially-empty error — message "{}" , "[]", or blank. Rather than show
 // that literally, fall back to something a user can act on. Check the
 // Supabase dashboard's Authentication → Logs for the real underlying error.
-function friendlyAuthError(err) {
+function friendlyAuthError(scope, err) {
+  logError(scope, err);
   const msg = err?.message?.trim();
   if (!msg || msg === "{}" || msg === "[]") {
     return "Something went wrong sending the email. This usually means the SMTP configuration in Supabase needs attention — check Authentication → Logs in the Supabase dashboard for the real error.";
@@ -79,12 +81,62 @@ function mergeWorkouts(localWorkouts, cloudWorkouts) {
   return merged;
 }
 
+// Per-date content diff between two `{ dateKey: Workout[] }` maps — returns
+// the date keys whose array differs. Used by pushNow (diffing current
+// workouts against the last-known-synced baseline) and syncSession's
+// merge/push-back step (diffing the merged result against what's already in
+// workout_logs), so only the date(s) that actually changed get upserted to
+// workout_logs instead of the whole history on every write.
+//
+// Deliberately content-based (deepEqual), not reference-based, even though
+// every workouts mutation in packages/core rebuilds the object via a
+// shallow spread (which would make reference equality a cheap and correct
+// per-date diff on its own): AppStateProvider's foreground-resync effect
+// also calls setWorkouts(migrateWorkouts(JSON.parse(raw))) on every app
+// foreground transition, which rebuilds the *entire* object from JSON,
+// handing every date a brand-new array reference regardless of whether its
+// content actually changed. A reference diff would treat every date as
+// dirty on nearly every foreground, silently reintroducing a full-history
+// push on a new trigger. The CPU cost of a full content diff on each
+// debounced push is negligible next to the network/DB write it replaces.
+function diffWorkoutDates(current, baseline) {
+  const dates = new Set([...Object.keys(current), ...Object.keys(baseline)]);
+  const changed = [];
+  for (const dateKey of dates) {
+    if (!deepEqual(current[dateKey] ?? [], baseline[dateKey] ?? [])) changed.push(dateKey);
+  }
+  return changed;
+}
+
+// Row shape workout_logs upserts share — one row per changed date.
+function toWorkoutLogRows(userId, workoutsObj, dateKeys) {
+  return dateKeys.map((dateKey) => ({
+    user_id: userId,
+    workout_date: dateKey,
+    data: workoutsObj[dateKey] || [],
+    updated_at: new Date().toISOString(),
+  }));
+}
+
 // Same phone-wins-unless-blank idea as mergeById/mergeWorkouts, but for a
 // single scalar field (used for the profile's identity fields) rather than
 // a collection: the local value wins whenever it's non-blank, and the
 // cloud's value only fills in when the local one is null/undefined/"".
 function preferLocal(localValue, cloudValue) {
   return localValue === null || localValue === undefined || localValue === "" ? cloudValue : localValue;
+}
+
+// True if the currently-active local namespace holds anything a stranger
+// signing in on top of it could lose or have leaked into their account —
+// used by the account-conflict check below, which only needs to fire when
+// there's actually something at stake in the guest bucket.
+function hasMeaningfulLocalData(exercises, routines, workouts, profile) {
+  return (
+    Object.keys(workouts).length > 0 ||
+    routines.length > 0 ||
+    exercises.some((e) => e.custom) ||
+    !!(profile.firstName || profile.lastName || profile.username || profile.birthday || profile.gender || profile.height || profile.weight)
+  );
 }
 
 // Cloud sync: sign in with email + password (or Google), and identity/
@@ -106,7 +158,20 @@ function preferLocal(localValue, cloudValue) {
 // `unit` keeps the phone's value unless the phone's is empty. The merged
 // result is then pushed back up so the cloud row matches too — no
 // confirmation needed since the phone's data is never clobbered.
-export function useCloudSync({ profile, setProfile, resetProfile, exercises, setExercises, routines, setRoutines, workouts, setWorkouts, unit, setUnit }) {
+export function useCloudSync({
+  profile, setProfile, resetProfile,
+  exercises, setExercises,
+  routines, setRoutines,
+  workouts, setWorkouts,
+  unit, setUnit,
+  // Which account's local cache is active right now (null = guest bucket),
+  // the function that switches it, and whether every local slice has
+  // finished (re)loading from disk for whichever namespace is currently
+  // active — all owned by AppStateProvider. See the pull-gate effect below
+  // for why a namespace switch must wait on localDataHydrated before
+  // syncSession reads workouts/exercises/etc.
+  activeAccountId, switchActiveAccount, localDataHydrated,
+}) {
   const [session, setSession] = useState(null);
   const [status, setStatus] = useState("idle"); // idle | authenticating | confirm-email | reset-email-sent | syncing | synced | premium-required | error
   const [error, setError] = useState(null);
@@ -148,11 +213,32 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
   // of the system prompt instead of it being truly unavailable, without
   // showing that button pointlessly on a device with no biometric hardware.
   const [biometricSupported, setBiometricSupported] = useState(false);
+  // True while a fresh explicit sign-in is waiting on the user to resolve
+  // "this device has data from another account" (see the pull-gate effect
+  // below) — App.js mounts the confirm modal off this flag, the same
+  // pattern as reauthPromptVisible/biometricPromptVisible.
+  const [accountConflictVisible, setAccountConflictVisible] = useState(false);
+  // Holds the session (and its cancelledRef) that triggered the conflict,
+  // so resolveAccountConflict can act on the same sign-in attempt the user
+  // is actually looking at rather than re-deriving it from whatever
+  // `session` happens to be by the time they answer.
+  const pendingConflictRef = useRef(null);
+  // Set right before a namespace switch that still needs syncSession (or
+  // attemptUnlock) to run once the newly-active namespace's local slices
+  // finish (re)loading — see the localDataHydrated-watching effect below.
+  // Cleared the moment that follow-up actually fires.
+  const pendingPostSwitchRef = useRef(null);
   // True for the whole duration of the pull-on-sign-in effect below (fetch
   // through applying the result), so the push effect skips re-uploading
   // whatever was just pulled instead of racing it.
   const isApplyingRemoteRef = useRef(false);
   const pushTimeoutRef = useRef(null);
+  // Snapshot of `workouts` as of the last point workout_logs was made to
+  // match it (after a successful pushNow, or after syncSession's
+  // pull/merge/push-back). pushNow diffs current `workouts` against this via
+  // diffWorkoutDates to find which date(s) actually changed since then, so
+  // it only needs to upsert those rows instead of the whole history.
+  const workoutsBaselineRef = useRef(workouts);
   // Marks which user id the pull-on-sign-in effect has already run for.
   // supabase.auth.onAuthStateChange fires a fresh `session` object (new
   // reference) not just on an explicit sign-in but also on TOKEN_REFRESHED
@@ -183,6 +269,14 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
   // correctly reads as "not fresh" instead of leaving a stale true flag
   // that a later cold start would misread as its own fresh sign-in.
   const justSignedInRef = useRef(false);
+  // Set alongside justSignedInRef specifically by signUp (see below) when a
+  // brand-new account gets an immediate session (no email confirmation
+  // required) — distinguishes "just created an account" from "just signed
+  // into an existing one" for the pull-gate effect below: guest data has no
+  // prior owner, so a fresh sign-up silently adopts it instead of raising
+  // the same conflict prompt a sign-in into an *existing*, different
+  // account would.
+  const justSignedUpRef = useRef(false);
   // Set right before reauthenticateWithGoogle below kicks off, since
   // signInWithGoogle doesn't resolve with a definitive success signal of
   // its own (it opens a browser and comes back later via deep link) — the
@@ -221,7 +315,9 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
     if (!supabase) return undefined;
     const handleUrl = ({ url }) => {
       const { queryParams } = Linking.parse(url);
-      if (queryParams?.code) supabase.auth.exchangeCodeForSession(queryParams.code).catch(() => {});
+      if (queryParams?.code) {
+        supabase.auth.exchangeCodeForSession(queryParams.code).catch((e) => logError("cloudSync.deepLink.exchangeCode", e));
+      }
     };
     Linking.getInitialURL().then((url) => {
       if (url) handleUrl({ url });
@@ -257,15 +353,21 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
     // early return can't leave it stuck true) closes that gap.
     isApplyingRemoteRef.current = true;
     try {
-      const { data, error: fetchError } = await supabase
-        .from("profiles")
-        .select("public_id, first_name, last_name, username, picture_url, birthday, gender, height, weight, premium, backup_data")
-        .eq("id", sess.user.id)
-        .single();
+      const [{ data, error: fetchError }, { data: workoutRows, error: workoutRowsError }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("public_id, first_name, last_name, username, picture_url, birthday, gender, height, weight, premium, backup_data")
+          .eq("id", sess.user.id)
+          .single(),
+        // Unconditional (no premium filter — RLS allows select regardless),
+        // since hasBackupData below needs to reflect these rows even for a
+        // non-premium account with stale leftover data.
+        supabase.from("workout_logs").select("workout_date, data").eq("user_id", sess.user.id),
+      ]);
 
       if (cancelledRef?.current) return;
-      if (fetchError) {
-        setError(friendlyAuthError(fetchError));
+      if (fetchError || workoutRowsError) {
+        setError(friendlyAuthError("cloudSync.pull", fetchError || workoutRowsError));
         setStatus("error");
         return;
       }
@@ -284,10 +386,11 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
       // local-only. Same phone-wins-unless-blank merge as those fields.
       setProfile((p) => ({ ...p, profileId: data.public_id, pictureUrl: preferLocal(p.pictureUrl, data.picture_url) }));
 
-      // Computed regardless of premium (the select above always fetches
-      // backup_data) so a non-premium account's leftover backup from before
-      // a downgrade is still reflected in hasBackupData.
-      const cloudHasData = data.backup_data && Object.keys(data.backup_data).length > 0;
+      // Computed regardless of premium (both fetches above run unconditionally)
+      // so a non-premium account's leftover backup from before a downgrade —
+      // in backup_data or in workout_logs — is still reflected in hasBackupData.
+      const cloudHasData =
+        (data.backup_data && Object.keys(data.backup_data).length > 0) || (workoutRows && workoutRows.length > 0);
       setHasBackupData(!!cloudHasData);
 
       // The remaining profile identity/biometric fields (name/username/
@@ -330,7 +433,39 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
         // so cloud workouts need it applied before comparing too, or an
         // old backup would look permanently "out of sync" with local.
         const cloudRoutines = data.backup_data?.routines ?? data.backup_data?.templates;
-        const cloudWorkouts = data.backup_data?.workouts && migrateWorkouts(data.backup_data.workouts);
+
+        // Reconstructed into the same `{ dateKey: Workout[] }` shape
+        // backup_data.workouts used to be, so mergeWorkouts/deepEqual below
+        // work unchanged against workout_logs rows instead of a blob.
+        const workoutRowsByDate = migrateWorkouts(Object.fromEntries((workoutRows || []).map((r) => [r.workout_date, r.data])));
+
+        // One-time lazy migration: zero workout_logs rows but a leftover
+        // legacy backup_data.workouts means this account/device hasn't
+        // migrated to workout_logs yet — adopt it once. Gated on
+        // workoutRows.length === 0 rather than a flag, so it's naturally
+        // idempotent (any later syncSession call sees rows already there and
+        // skips this) and a failed upsert just gets retried next time. The
+        // legacy `workouts` key in backup_data is left untouched here — it
+        // drops out for free the next time anything writes backup_data,
+        // since pushNow/the push-back below no longer include it.
+        let cloudWorkouts = workoutRowsByDate;
+        const legacyWorkouts = data.backup_data?.workouts;
+        if (workoutRows.length === 0 && legacyWorkouts && Object.keys(legacyWorkouts).length > 0) {
+          const migratedLegacy = migrateWorkouts(legacyWorkouts);
+          const legacyRows = Object.entries(migratedLegacy).map(([dateKey, dayWorkouts]) => ({
+            user_id: sess.user.id,
+            workout_date: dateKey,
+            data: dayWorkouts,
+            updated_at: new Date().toISOString(),
+          }));
+          if (legacyRows.length > 0) {
+            const { error: migrateError } = await supabase
+              .from("workout_logs")
+              .upsert(legacyRows, { onConflict: "user_id,workout_date" });
+            if (!migrateError) cloudWorkouts = migratedLegacy;
+          }
+          setHasBackupData(true);
+        }
 
         // If cloud and local already agree, this is just a re-check (e.g. a
         // refresh re-running this effect for the same user, or nothing
@@ -347,7 +482,7 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
           localHasData &&
           deepEqual(data.backup_data.exercises ?? {}, customExercises) &&
           deepEqual(cloudRoutines ?? {}, routines) &&
-          deepEqual(cloudWorkouts ?? {}, workouts) &&
+          deepEqual(cloudWorkouts, workouts) &&
           (data.backup_data.unit ?? unit) === unit;
 
         if (!inSync) {
@@ -367,20 +502,37 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
           if (mergedWorkouts !== workouts) setWorkouts(mergedWorkouts);
           if (mergedUnit !== unit) setUnit(mergedUnit);
 
-          // Push the merged result back up so the cloud row matches too.
-          await supabase
-            .from("profiles")
-            .update({
-              backup_data: {
-                exercises: mergedExercises.filter((e) => e.custom),
-                routines: mergedRoutines,
-                workouts: mergedWorkouts,
-                unit: mergedUnit,
-              },
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", sess.user.id);
+          // Push the merged result back up so the cloud row matches too —
+          // profile fields (no `workouts` key anymore) and workout_logs rows
+          // separately. Only the date(s) whose content actually differs from
+          // what's already in workout_logs get upserted, not the whole
+          // history.
+          const changedDates = diffWorkoutDates(mergedWorkouts, cloudWorkouts);
+          await Promise.all([
+            supabase
+              .from("profiles")
+              .update({
+                backup_data: {
+                  exercises: mergedExercises.filter((e) => e.custom),
+                  routines: mergedRoutines,
+                  unit: mergedUnit,
+                },
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", sess.user.id),
+            changedDates.length > 0
+              ? supabase
+                  .from("workout_logs")
+                  .upsert(toWorkoutLogRows(sess.user.id, mergedWorkouts, changedDates), { onConflict: "user_id,workout_date" })
+              : Promise.resolve(),
+          ]);
           setHasBackupData(true);
+          workoutsBaselineRef.current = mergedWorkouts;
+        } else {
+          // Cloud already matches local — record that agreement as the
+          // baseline so the next debounced push only pushes genuinely new
+          // edits, not a re-diff against a stale/default baseline.
+          workoutsBaselineRef.current = workouts;
         }
 
         setStatus("synced");
@@ -405,41 +557,139 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
     }
   };
 
-  // Gates cloud sync on `session` behind re-authentication. A fresh
-  // explicit sign-in (SIGNED_IN — e.g. from SignInModal, or a password
-  // reset via updatePassword) just proved identity, so it syncs right
-  // away. A *restored* session — cold start, or a token refresh for a
-  // session that was already sitting there — did not, so it's locked and
-  // immediately asked for right here (attemptUnlock, below): Face ID/
-  // fingerprint first, falling back to ReauthModal (password, or
-  // "Continue with Google") on anything but success. Either path can be
-  // skipped ("Not now" in ReauthModal, or just backgrounding the app) —
-  // the rest of the app stays fully usable on local data regardless, and
-  // "Unlock to sync" in CloudBackupSection re-asks later on demand.
+  // Gates cloud sync on `session` behind re-authentication, AND (new) behind
+  // making sure the account signing in actually owns whatever's sitting in
+  // this device's currently-active local namespace. Waits on
+  // localDataHydrated first — this runs as soon as `session` goes truthy,
+  // which on a cold start can be before local disk reads finish, and the
+  // decision below reads exercises/routines/workouts/profile, so evaluating
+  // it against still-loading (empty/default) state could wrongly conclude
+  // "nothing at stake" for a device that actually has real guest data.
+  //
+  // Once hydrated, exactly one of four things happens for a *fresh explicit*
+  // sign-in/up/OAuth/password-reset (justSignedInRef true — SignInModal, or
+  // updatePassword):
+  //   1. Incoming account === the device's already-active account — today's
+  //      normal case, sync right away.
+  //   2. The active namespace already belongs to a *different* account (or
+  //      the guest bucket is empty) — always safe: switch straight to the
+  //      incoming account's own namespace (fresh, or its own previously-
+  //      cached data if it's used this device before) without touching
+  //      whatever's parked under the other account/guest. No prompt.
+  //   3. The guest bucket is active and holds real data, and this is a
+  //      brand-new sign-*up* (justSignedUpRef true) — guest data has no
+  //      prior owner, so it silently becomes this new account's data (same
+  //      "seeds the row" behavior as always), no prompt.
+  //   4. The guest bucket is active and holds real data, and an *existing*,
+  //      different account is signing in — the one ambiguous case (someone
+  //      else's phone with real unsynced guest data). Pause and ask via
+  //      accountConflictVisible/resolveAccountConflict below.
+  //
+  // A *restored* session (cold start / token refresh, justSignedInRef
+  // false) is never "someone else authenticating" — if the guest bucket is
+  // still active, silently claim it for continuity (the common case: every
+  // already-signed-in install, the first launch after this shipped) and
+  // fall into the same mandatory re-auth gate (attemptUnlock) as before.
   // Skipped during password recovery — that flow isn't a normal sign-in
   // yet, it resolves into one (re-running this effect) once the password
   // is set.
   useEffect(() => {
-    if (!supabase || !session || recoveryMode) return undefined;
+    if (!supabase || !session || recoveryMode || !localDataHydrated) return undefined;
     if (syncedUserIdRef.current === session.user.id) return undefined;
     syncedUserIdRef.current = session.user.id;
     const cancelledRef = { current: false };
+    const incomingId = session.user.id;
 
-    if (justSignedInRef.current) {
+    (async () => {
+      if (!justSignedInRef.current) {
+        setSyncLocked(true);
+        if (activeAccountId == null) {
+          await switchActiveAccount(incomingId);
+          if (cancelledRef.current) return;
+          pendingPostSwitchRef.current = { session, cancelledRef, resume: "unlock" };
+          return;
+        }
+        attemptUnlock(session, cancelledRef);
+        return;
+      }
+
+      const signedUp = justSignedUpRef.current;
+      justSignedUpRef.current = false;
+
+      if (activeAccountId === incomingId) {
+        setSyncLocked(false);
+        syncSession(session, cancelledRef);
+        return;
+      }
+
+      const guestHasData = activeAccountId == null && hasMeaningfulLocalData(exercises, routines, workouts, profile);
+
+      if (guestHasData && !signedUp) {
+        pendingConflictRef.current = { session, cancelledRef, email: session.user.email };
+        setAccountConflictVisible(true);
+        return;
+      }
+
+      if (guestHasData && signedUp) await claimGuestDataForAccount(incomingId);
+      await switchActiveAccount(incomingId);
+      if (cancelledRef.current) return;
       setSyncLocked(false);
-      syncSession(session, cancelledRef);
-    } else {
-      setSyncLocked(true);
-      attemptUnlock(session, cancelledRef);
-    }
+      pendingPostSwitchRef.current = { session, cancelledRef, resume: "sync" };
+    })();
 
     return () => {
       cancelledRef.current = true;
     };
-    // Only re-run when the session or recovery state changes — not on every
-    // local edit, which is handled by the push effect below.
+    // Only re-run when the session/recovery/hydration/active-namespace state
+    // changes — not on every local edit, which is handled by the push
+    // effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, recoveryMode]);
+  }, [session, recoveryMode, localDataHydrated, activeAccountId]);
+
+  // Finishes what the effect above started whenever it switched namespaces
+  // mid-flow: switchActiveAccount changes the keys every usePersistedState
+  // instance in AppStateProvider reads/writes, which makes localDataHydrated
+  // dip back to false and then true again once the new namespace has
+  // actually loaded — only then is it safe to read exercises/routines/
+  // workouts/profile without racing that reload. resume "sync" is a fresh
+  // sign-in that already proved identity (syncSession right away); "unlock"
+  // is a restored session that silently claimed an empty guest bucket for
+  // continuity and still needs the normal mandatory re-auth gate.
+  useEffect(() => {
+    const pending = pendingPostSwitchRef.current;
+    if (!pending || !localDataHydrated) return;
+    pendingPostSwitchRef.current = null;
+    if (pending.cancelledRef.current) return;
+    if (pending.resume === "unlock") attemptUnlock(pending.session, pending.cancelledRef);
+    else syncSession(pending.session, pending.cancelledRef);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localDataHydrated]);
+
+  // Resolves the "this device has data from another account" prompt.
+  // "replace" wipes the guest bucket outright (the offer's "otherwise the
+  // data will be wiped" — a deliberate, user-chosen action, not a silent
+  // side effect) and proceeds as the incoming account; "cancel" backs the
+  // just-authenticated attempt out entirely, leaving the guest bucket (and
+  // whoever's actually using this device) untouched.
+  const resolveAccountConflict = async (action) => {
+    const pending = pendingConflictRef.current;
+    if (!pending) return;
+    pendingConflictRef.current = null;
+    setAccountConflictVisible(false);
+
+    if (action === "cancel") {
+      justSignedInRef.current = false;
+      await signOut();
+      return;
+    }
+
+    const incomingId = pending.session.user.id;
+    await clearGuestData();
+    await switchActiveAccount(incomingId);
+    if (pending.cancelledRef.current) return;
+    setSyncLocked(false);
+    pendingPostSwitchRef.current = { session: pending.session, cancelledRef: pending.cancelledRef, resume: "sync" };
+  };
 
   // Completes a Google-OAuth re-auth started from ReauthModal (see
   // reauthenticateWithGoogle below): signInWithGoogle doesn't resolve with
@@ -480,13 +730,33 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
       weight: toNullableNumber(profile.weight),
       updated_at: new Date().toISOString(),
     };
+    // `workouts` is deliberately left out — see workout_logs below instead.
+    // Any legacy `workouts` key still sitting in backup_data from before
+    // this version drops out the instant this write lands, since a JSONB
+    // column UPDATE replaces the whole value, not just the keys named here.
     if (profile.premium) {
-      payload.backup_data = { exercises: exercises.filter((e) => e.custom), routines, workouts, unit };
+      payload.backup_data = { exercises: exercises.filter((e) => e.custom), routines, unit };
     }
-    const { error: pushError } = await supabase.from("profiles").update(payload).eq("id", session.user.id);
-    setStatus(pushError ? "error" : "synced");
-    if (pushError) setError(friendlyAuthError(pushError));
-    else if (profile.premium) setHasBackupData(true);
+
+    const changedDates = profile.premium ? diffWorkoutDates(workouts, workoutsBaselineRef.current) : [];
+
+    const [{ error: pushError }, workoutsResult] = await Promise.all([
+      supabase.from("profiles").update(payload).eq("id", session.user.id),
+      changedDates.length > 0
+        ? supabase
+            .from("workout_logs")
+            .upsert(toWorkoutLogRows(session.user.id, workouts, changedDates), { onConflict: "user_id,workout_date" })
+        : Promise.resolve({ error: null }),
+    ]);
+
+    const anyError = pushError || workoutsResult.error;
+    setStatus(anyError ? "error" : "synced");
+    if (anyError) {
+      setError(friendlyAuthError("cloudSync.push", anyError));
+    } else if (profile.premium) {
+      setHasBackupData(true);
+      workoutsBaselineRef.current = workouts;
+    }
   };
 
   // Profile's "Danger zone" — wipes the cloud row's backup_data (gated
@@ -499,13 +769,22 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
   const clearBackupData = async () => {
     if (!supabase || !session) return;
     setStatus("syncing");
-    const { error: clearError } = await supabase
-      .from("profiles")
-      .update({ backup_data: {}, updated_at: new Date().toISOString() })
-      .eq("id", session.user.id);
-    setStatus(clearError ? "error" : "synced");
-    if (clearError) setError(friendlyAuthError(clearError));
-    else setHasBackupData(false);
+    const [{ error: clearError }, { error: deleteWorkoutLogsError }] = await Promise.all([
+      supabase.from("profiles").update({ backup_data: {}, updated_at: new Date().toISOString() }).eq("id", session.user.id),
+      supabase.from("workout_logs").delete().eq("user_id", session.user.id),
+    ]);
+    const anyError = clearError || deleteWorkoutLogsError;
+    setStatus(anyError ? "error" : "synced");
+    if (anyError) {
+      setError(friendlyAuthError("cloudSync.clearBackup", anyError));
+    } else {
+      setHasBackupData(false);
+      // Reset to empty so the *next* push/sync re-uploads everything
+      // currently in local `workouts`, not just whatever date happens to be
+      // touched next — matches this function's "one-time empty-out, not a
+      // permanent opt-out" contract (see the comment above).
+      workoutsBaselineRef.current = {};
+    }
   };
 
   // Profile's "Danger zone" — permanently deletes the signed-in account:
@@ -536,7 +815,7 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
     setStatus("syncing");
     const { error: fnError } = await supabase.functions.invoke("delete-account");
     if (fnError) {
-      const message = friendlyAuthError(fnError);
+      const message = friendlyAuthError("cloudSync.deleteAccount", fnError);
       setStatus("error");
       setError(message);
       return message;
@@ -557,14 +836,21 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
   // re-evaluates this effect and schedules a push for anything that changed
   // locally while it was locked.
   useEffect(() => {
-    if (!supabase || !session || recoveryMode || isApplyingRemoteRef.current || syncLocked) return undefined;
+    // localDataHydrated also guards this — right after an account switch it
+    // dips back to false until the new namespace's slices finish loading,
+    // which (thanks to switchActiveAccount clearing syncLocked before that
+    // finishes, so the pull-gate effect's own deferred syncSession can run)
+    // would otherwise leave a narrow window where this could push whatever
+    // still-loading/default values happen to be in memory up to the
+    // newly-active account's cloud row.
+    if (!supabase || !session || recoveryMode || isApplyingRemoteRef.current || syncLocked || !localDataHydrated) return undefined;
 
     if (pushTimeoutRef.current) clearTimeout(pushTimeoutRef.current);
     pushTimeoutRef.current = setTimeout(pushNow, DEBOUNCE_MS);
 
     return () => clearTimeout(pushTimeoutRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, profile, exercises, routines, workouts, unit, syncLocked]);
+  }, [session, profile, exercises, routines, workouts, unit, syncLocked, localDataHydrated]);
 
   // Manual "Sync now" — skips the debounce and pushes immediately, so a
   // user who wants confidence their latest change is backed up doesn't have
@@ -574,7 +860,7 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
   // branch), since for a non-premium account there's no backup status worth
   // giving a manual retry for.
   const syncNow = async () => {
-    if (!supabase || !session || syncLocked) return;
+    if (!supabase || !session || syncLocked || !localDataHydrated) return;
     if (pushTimeoutRef.current) clearTimeout(pushTimeoutRef.current);
     await pushNow();
   };
@@ -585,7 +871,7 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
     setError(null);
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     if (signInError) {
-      setError(friendlyAuthError(signInError));
+      setError(friendlyAuthError("cloudSync.signIn", signInError));
       setStatus("error");
     }
     // On success, the auth-state-change listener sets `session` and the
@@ -611,11 +897,18 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
       setError("An account with this email already exists. Try signing in instead.");
       setStatus("error");
     } else if (signUpError) {
-      setError(friendlyAuthError(signUpError));
+      setError(friendlyAuthError("cloudSync.signUp", signUpError));
       setStatus("error");
     } else if (!data.session) {
       // Email confirmation is required before the account can sign in.
       setStatus("confirm-email");
+    } else {
+      // Immediate session (email confirmation disabled for this project) —
+      // the SIGNED_IN event about to fire is for a brand-new account, not
+      // an existing one, so mark it: the pull-gate effect below reads this
+      // to silently adopt any guest data instead of raising the "this
+      // device has data from another account" conflict prompt.
+      justSignedUpRef.current = true;
     }
   };
 
@@ -642,7 +935,7 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
     if (Platform.OS === "web") {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({ provider: "google" });
       if (oauthError) {
-        setError(friendlyAuthError(oauthError));
+        setError(friendlyAuthError("cloudSync.signInWithGoogle", oauthError));
         setStatus("error");
       }
       return;
@@ -654,7 +947,7 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
       options: { redirectTo, skipBrowserRedirect: true },
     });
     if (oauthError || !data?.url) {
-      setError(friendlyAuthError(oauthError || { message: "Couldn't start Google sign-in." }));
+      setError(friendlyAuthError("cloudSync.signInWithGoogle", oauthError || { message: "Couldn't start Google sign-in." }));
       setStatus("error");
       return;
     }
@@ -673,13 +966,14 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
       // list, or the user denied consent) — surface that instead of a
       // generic message so it's actually actionable.
       const description = queryParams?.error_description || queryParams?.error;
-      setError(description ? `Google sign-in failed: ${description}` : "Google sign-in didn't return a valid code.");
+      if (description) logError("cloudSync.signInWithGoogle.redirect", new Error(description));
+      setError("Google sign-in didn't work. Please try again.");
       setStatus("error");
       return;
     }
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(queryParams.code);
     if (exchangeError) {
-      setError(friendlyAuthError(exchangeError));
+      setError(friendlyAuthError("cloudSync.signInWithGoogle.exchange", exchangeError));
       setStatus("error");
     }
     // On success, the auth-state-change listener sets `session` and the
@@ -694,7 +988,7 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
       redirectTo: Linking.createURL("reset-password"),
     });
     if (resetError) {
-      setError(friendlyAuthError(resetError));
+      setError(friendlyAuthError("cloudSync.resetPassword", resetError));
       setStatus("error");
     } else {
       setStatus("reset-email-sent");
@@ -713,7 +1007,7 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
     setError(null);
     const { error: updateError } = await supabase.auth.updateUser({ password });
     if (updateError) {
-      setError(friendlyAuthError(updateError));
+      setError(friendlyAuthError("cloudSync.updatePassword", updateError));
       setStatus("error");
     } else {
       justSignedInRef.current = true;
@@ -777,7 +1071,7 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
     setReauthError(null);
     const { error: signInError } = await supabase.auth.signInWithPassword({ email: session.user.email, password });
     if (signInError) {
-      setReauthError(friendlyAuthError(signInError));
+      setReauthError(friendlyAuthError("cloudSync.reauthenticate", signInError));
       setStatus("error");
       return false;
     }
@@ -906,5 +1200,8 @@ export function useCloudSync({ profile, setProfile, resetProfile, exercises, set
     reauthenticateWithPassword,
     reauthenticateWithGoogle,
     dismissReauthPrompt,
+    accountConflictVisible,
+    conflictAccountEmail: pendingConflictRef.current?.email || "",
+    resolveAccountConflict,
   };
 }

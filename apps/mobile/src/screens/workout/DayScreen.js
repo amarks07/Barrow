@@ -6,6 +6,7 @@ import { useAppState } from "../../state/AppStateProvider";
 import { DayView } from "../../components/workout/DayView";
 import { WorkoutSummaryView } from "../../components/workout/WorkoutSummaryView";
 import { asyncStorageAdapter } from "../../state/storage";
+import { namespacedKey } from "../../state/accountNamespace";
 import { refreshFocusWidget } from "../../widget/refreshFocusWidget";
 import { refreshFocusNotification } from "../../notification/focusNotification";
 
@@ -24,7 +25,7 @@ function DayPanel({
   exercises, routines, unit, workouts, setWorkouts,
   nextId, dayWorkoutsActions, routineActions, exerciseActions, workoutView, focusNotificationEnabled,
   plateCalculatorEnabled, workoutTimerEnabled, workoutTimerStartedAt,
-  getOrCreateWorkoutForDate,
+  getOrCreateWorkoutForDate, activeAccountId,
 }) {
   // True only while DayScreen itself is the screen on top — false once
   // Focus flow is pushed over it. Guards the pointer effects below so they
@@ -67,6 +68,8 @@ function DayPanel({
   // every render with no extra effect.
   const focusNotificationEnabledRef = useRef(focusNotificationEnabled);
   focusNotificationEnabledRef.current = focusNotificationEnabled;
+  const activeAccountIdRef = useRef(activeAccountId);
+  activeAccountIdRef.current = activeAccountId;
   const workoutTimerEnabledRef = useRef(workoutTimerEnabled);
   workoutTimerEnabledRef.current = workoutTimerEnabled;
   const workoutTimerStartedAtRef = useRef(workoutTimerStartedAt);
@@ -122,13 +125,13 @@ function DayPanel({
     if (!isActive || !screenFocused || showSummary || !workout || entries.length === 0 || !timerRunning) return;
     let cancelled = false;
     asyncStorageAdapter
-      .getItem(FOCUS_POINTER_KEY)
+      .getItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current))
       .then((raw) => {
         if (cancelled) return;
         const existing = raw ? JSON.parse(raw) : null;
         if (existing && existing.dateKey === dateKey && existing.workoutId === workout.id) return;
         const pointer = { dateKey, workoutId: workout.id, exerciseId: entries[0].exerciseId, updatedAt: Date.now() };
-        return asyncStorageAdapter.setItem(FOCUS_POINTER_KEY, JSON.stringify(pointer)).then(() => {
+        return asyncStorageAdapter.setItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current), JSON.stringify(pointer)).then(() => {
           refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
           if (focusNotificationEnabledRef.current === "on") {
             refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
@@ -153,12 +156,12 @@ function DayPanel({
     if (!isActive || !screenFocused || timerRunning || !workout) return;
     let cancelled = false;
     asyncStorageAdapter
-      .getItem(FOCUS_POINTER_KEY)
+      .getItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current))
       .then((raw) => {
         if (cancelled) return;
         const existing = raw ? JSON.parse(raw) : null;
         if (!existing || existing.dateKey !== dateKey || existing.workoutId !== workout.id) return;
-        return asyncStorageAdapter.removeItem(FOCUS_POINTER_KEY).then(() => {
+        return asyncStorageAdapter.removeItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current)).then(() => {
           refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
           if (focusNotificationEnabledRef.current === "on") {
             refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
@@ -186,11 +189,11 @@ function DayPanel({
       if (workoutTimerEnabledRef.current && workoutTimerStartedAtRef.current) return;
       const { dateKey: trackedDateKey, workoutId: trackedWorkoutId } = trackedWorkoutRef.current;
       asyncStorageAdapter
-        .getItem(FOCUS_POINTER_KEY)
+        .getItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current))
         .then((raw) => {
           const existing = raw ? JSON.parse(raw) : null;
           if (!existing || existing.dateKey !== trackedDateKey || existing.workoutId !== trackedWorkoutId) return;
-          return asyncStorageAdapter.removeItem(FOCUS_POINTER_KEY).then(() => {
+          return asyncStorageAdapter.removeItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current)).then(() => {
             refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
             if (focusNotificationEnabledRef.current === "on") {
               refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
@@ -285,7 +288,7 @@ export function DayScreen({ route, navigation }) {
     exercises, routines, unit, workouts, setWorkouts,
     nextId, dayWorkoutsActions, routineActions, exerciseActions, workoutView, focusNotificationEnabled,
     plateCalculatorEnabled, workoutTimerEnabled, workoutTimerStartedAt,
-    getOrCreateWorkoutForDate,
+    getOrCreateWorkoutForDate, activeAccountId,
   } = useAppState();
 
   const [centerDateKey, setCenterDateKey] = useState(initialDateKey);
@@ -334,6 +337,7 @@ export function DayScreen({ route, navigation }) {
           workoutTimerEnabled={workoutTimerEnabled}
           workoutTimerStartedAt={workoutTimerStartedAt}
           getOrCreateWorkoutForDate={getOrCreateWorkoutForDate}
+          activeAccountId={activeAccountId}
         />
       ))}
     </PagerView>

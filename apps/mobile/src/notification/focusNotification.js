@@ -1,6 +1,7 @@
 import notifee, { AndroidImportance, AndroidVisibility, AndroidStyle } from "@notifee/react-native";
 import { readFocusSnapshot, fmtNum } from "@barrow/core";
 import { asyncStorageAdapter } from "../state/storage";
+import { getActiveAccountId, withAccountNamespace } from "../state/accountNamespace";
 import { readExercises, readUnit } from "../state/focusReaders";
 
 // A plain (dismissable) ongoing notification, not a foreground service —
@@ -86,16 +87,17 @@ function buildNotification(snapshot, unit) {
 // (no workout open in Focus flow) rather than showing a stale/empty shell.
 export async function refreshFocusNotification() {
   await ensureChannel();
-  const [exercises, unit] = await Promise.all([readExercises(), readUnit()]);
-  const snapshot = await readFocusSnapshot(asyncStorageAdapter, exercises);
+  const storage = withAccountNamespace(asyncStorageAdapter, await getActiveAccountId());
+  const [exercises, unit] = await Promise.all([readExercises(storage), readUnit(storage)]);
+  const snapshot = await readFocusSnapshot(storage, exercises);
   const notification = buildNotification(snapshot, unit);
   if (!notification) {
-    await notifee.cancelNotification(FOCUS_NOTIFICATION_ID).catch(() => {});
+    await notifee.cancelNotification(FOCUS_NOTIFICATION_ID).catch((e) => console.error("Barrow: failed to cancel focus notification", e));
     return;
   }
   await notifee.displayNotification(notification);
 }
 
 export async function cancelFocusNotification() {
-  await notifee.cancelNotification(FOCUS_NOTIFICATION_ID).catch(() => {});
+  await notifee.cancelNotification(FOCUS_NOTIFICATION_ID).catch((e) => console.error("Barrow: failed to cancel focus notification", e));
 }

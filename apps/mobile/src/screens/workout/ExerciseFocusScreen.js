@@ -3,6 +3,7 @@ import { useWorkoutActions } from "@barrow/core";
 import { useAppState } from "../../state/AppStateProvider";
 import { ExerciseFocusView } from "../../components/workout/ExerciseFocusView";
 import { asyncStorageAdapter } from "../../state/storage";
+import { namespacedKey } from "../../state/accountNamespace";
 import { refreshFocusWidget } from "../../widget/refreshFocusWidget";
 import { refreshFocusNotification } from "../../notification/focusNotification";
 
@@ -13,7 +14,7 @@ export function ExerciseFocusScreen({ route, navigation }) {
   const { dateKey, workoutId, exerciseId, focusSetId, focusField } = route.params;
   const {
     exercises, routines, unit, workouts, setWorkouts, nextId, focusSupersetGrouping, focusNotificationEnabled,
-    plateCalculatorEnabled,
+    plateCalculatorEnabled, activeAccountId,
   } = useAppState();
 
   const workoutActions = useWorkoutActions({
@@ -41,10 +42,16 @@ export function ExerciseFocusScreen({ route, navigation }) {
   // normal in-workout navigation never trips this.
   const pointerTimeout = useRef(null);
   const pendingPointerRef = useRef(null);
+  // Read via a ref (not the value directly) since the unmount-flush effect
+  // below has an empty dep array and would otherwise always write to
+  // whichever namespace was active at mount, even after a later account
+  // switch — same reasoning as DayScreen's own activeAccountIdRef.
+  const activeAccountIdRef = useRef(activeAccountId);
+  activeAccountIdRef.current = activeAccountId;
 
   const savePointer = (pointer) => {
     asyncStorageAdapter
-      .setItem(FOCUS_POINTER_KEY, JSON.stringify(pointer))
+      .setItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current), JSON.stringify(pointer))
       .then(() => {
         refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
         if (focusNotificationEnabled === "on") {

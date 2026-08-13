@@ -15,6 +15,45 @@ import appJson from "../../app.json";
 // be the longest list; other categories are just flat string arrays.
 export const PATCH_NOTES = [
   {
+    version: "1.3.0",
+    date: "2026-08-12",
+    title: "Friends, multi-account devices, and a countdown timer",
+    notes: {
+      features: [
+        {
+          section: "Friends",
+          items: [
+            "Add friends by searching name, username, Profile ID, or exact email, or scan their QR code to add each other instantly.",
+            "Send, accept, decline, cancel, or remove friend requests from the new Friends screen in your profile.",
+          ],
+        },
+        {
+          section: "Multi-account devices",
+          items: [
+            "Barrow now keeps each signed-in account's data separate on a shared device — signing into a different account no longer overwrites what was already there.",
+            "Signing into an existing account on a device with unsynced local data now asks whether to replace that data or keep it by creating a new account for it.",
+          ],
+        },
+        {
+          section: "Header",
+          items: [
+            "Added a countdown timer button next to Preferences, for timing anything (rest, holds, etc.) independent of the workout timer.",
+          ],
+        },
+      ],
+      styling: [
+        "Share Routine now opens as a floating card instead of a full screen, matching the new friend QR sharing screens.",
+        "Screen brightness now jumps to max automatically while a routine or friend QR code is on screen, for easier scanning.",
+        "Sign out now asks for confirmation before signing you out.",
+        "\"Not now\" on the biometric unlock prompt is now a proper button, matching \"Enable\".",
+      ],
+      fixes: [
+        "Cloud-synced workouts now sync per day instead of as one big blob, so syncing is faster and uses less data.",
+        "Error messages across account, routine, and friend actions are now clearer and no longer show raw technical error text.",
+      ],
+    },
+  },
+  {
     version: "1.2.2",
     date: "2026-08-12",
     title: "Stretch run screen, widget polish, and fixes",

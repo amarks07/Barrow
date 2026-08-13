@@ -215,6 +215,286 @@ $$;
 revoke all on function public.set_profile_picture_url(text) from public;
 grant execute on function public.set_profile_picture_url(text) to authenticated;
 
+-- One row per (user, date) holding that day's workouts — split out of
+-- profiles.backup_data because `workouts` was the only part of that JSONB
+-- blob that grows unboundedly with continued use, and Postgres has no
+-- partial-JSONB update: any change to backup_data rewrote the user's entire
+-- lifetime workout history as a new row version on every debounced edit
+-- (see pushNow in useCloudSync.js). `data` holds the same array shape
+-- backup_data.workouts[dateKey] used to (see migrateWorkouts in
+-- packages/core/src/workouts.js for the per-workout shape). `workout_date`
+-- matches toKey() in packages/core/src/date.js — a local calendar date
+-- string ("YYYY-MM-DD"), stored as a real `date` column so PostgREST
+-- round-trips it as that same string with no timezone handling needed.
+create table if not exists public.workout_logs (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  workout_date date not null,
+  data jsonb not null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, workout_date)
+);
+
+alter table public.workout_logs enable row level security;
+
+-- Row-level equivalent of profiles' protect_premium_columns trigger — a
+-- plain RLS policy suffices here (unlike profiles, every column of this
+-- table IS backup data, so there's no need to distinguish which columns an
+-- UPDATE touches). The exists() subquery reads the caller's own profiles
+-- row, which is safe under profiles_select_own (auth.uid() = id) — no RLS
+-- recursion, since profiles' own policies never reference workout_logs.
+drop policy if exists "workout_logs_insert_premium" on public.workout_logs;
+create policy "workout_logs_insert_premium" on public.workout_logs
+  for insert with check (
+    auth.uid() = user_id
+    and exists (select 1 from public.profiles p where p.id = auth.uid() and p.premium)
+  );
+
+drop policy if exists "workout_logs_update_premium" on public.workout_logs;
+create policy "workout_logs_update_premium" on public.workout_logs
+  for update using (
+    auth.uid() = user_id
+    and exists (select 1 from public.profiles p where p.id = auth.uid() and p.premium)
+  );
+
+-- Unconditional (no premium check), unlike insert/update above — mirrors
+-- the "Clear backup data" exemption protect_premium_columns carves out for
+-- profiles.backup_data: a downgraded-from-premium account must still be
+-- able to read its own stale rows (hasBackupData in useCloudSync.js) and
+-- delete them (Danger zone's "Clear backup data", and the cascade from
+-- deleteAccount), even though it can no longer write new backup data.
+drop policy if exists "workout_logs_select_own" on public.workout_logs;
+create policy "workout_logs_select_own" on public.workout_logs
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "workout_logs_delete_own" on public.workout_logs;
+create policy "workout_logs_delete_own" on public.workout_logs
+  for delete using (auth.uid() = user_id);
+
+-- Friends: one row per pair of users, direction-agnostic (the unique index
+-- below normalizes requester/recipient into least/greatest so A->B and B->A
+-- can never both exist as separate rows). 'pending' means requester_id is
+-- waiting on recipient_id to accept; QR-code adds (see
+-- add_friend_by_public_id below) skip straight to 'accepted' since both
+-- people already proved presence to each other by scanning.
+create table if not exists public.friendships (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid not null references public.profiles (id) on delete cascade,
+  recipient_id uuid not null references public.profiles (id) on delete cascade,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint friendships_not_self check (requester_id <> recipient_id)
+);
+
+drop index if exists friendships_pair_key;
+create unique index friendships_pair_key on public.friendships (
+  least(requester_id, recipient_id), greatest(requester_id, recipient_id)
+);
+
+alter table public.friendships enable row level security;
+
+drop policy if exists "friendships_select_own" on public.friendships;
+create policy "friendships_select_own" on public.friendships
+  for select using (auth.uid() in (requester_id, recipient_id));
+
+-- Direct inserts (defense in depth — send_friend_request/add_friend_by_public_id
+-- below are security definer and do the real inserting) still can't impersonate
+-- another user as the requester.
+drop policy if exists "friendships_insert_own" on public.friendships;
+create policy "friendships_insert_own" on public.friendships
+  for insert with check (auth.uid() = requester_id);
+
+-- Only the recipient can accept a pending request — the client does this as a
+-- plain update (status: 'pending' -> 'accepted'), no RPC needed.
+drop policy if exists "friendships_update_recipient" on public.friendships;
+create policy "friendships_update_recipient" on public.friendships
+  for update using (auth.uid() = recipient_id);
+
+-- Either side can delete: declining an incoming request, cancelling an
+-- outgoing one, or unfriending an accepted one are all the same operation
+-- from the client's perspective — no separate "declined" status to track.
+drop policy if exists "friendships_delete_own" on public.friendships;
+create policy "friendships_delete_own" on public.friendships
+  for delete using (auth.uid() in (requester_id, recipient_id));
+
+-- profiles' own RLS (select own row only) blocks reading anyone else's
+-- name/username/picture directly, so every friends-list read that needs to
+-- show *another* user's info goes through one of these four security
+-- definer functions instead, each narrowly scoped to exactly the cross-user
+-- read/write it needs rather than opening profiles up broadly.
+
+-- Search by name/username/Profile ID (partial match) or email (exact match
+-- only, case-insensitive) — exact-only for email specifically so this can't
+-- be used to enumerate accounts by trying email fragments, unlike the other
+-- fields which are already effectively public (shown on the friends screen,
+-- shareable via QR/MenuRow).
+create or replace function public.search_profiles(query text)
+returns table (
+  id uuid,
+  public_id text,
+  username text,
+  first_name text,
+  last_name text,
+  picture_url text
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select p.id, p.public_id, p.username, p.first_name, p.last_name, p.picture_url
+  from public.profiles p
+  where p.id <> auth.uid()
+    and length(trim(query)) >= 2
+    and (
+      p.public_id ilike '%' || query || '%'
+      or p.username ilike '%' || query || '%'
+      or p.first_name ilike '%' || query || '%'
+      or p.last_name ilike '%' || query || '%'
+      or (p.first_name || ' ' || p.last_name) ilike '%' || query || '%'
+      or lower(p.email) = lower(trim(query))
+    )
+  limit 20;
+$$;
+
+revoke all on function public.search_profiles(text) from public;
+grant execute on function public.search_profiles(text) to authenticated;
+
+-- QR-scan add: both people already proved presence to each other by
+-- scanning, so this skips the request/accept dance entirely and upserts the
+-- pair straight to 'accepted' — including flipping an existing pending
+-- request (either direction) straight to accepted, so scanning a QR code
+-- after already sending/receiving a search-based request just confirms it
+-- immediately instead of erroring on the conflict.
+create or replace function public.add_friend_by_public_id(target_public_id text)
+returns table (
+  id uuid,
+  public_id text,
+  username text,
+  first_name text,
+  last_name text,
+  picture_url text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target uuid;
+begin
+  select p.id into target from public.profiles p where p.public_id = target_public_id;
+  if target is null then
+    raise exception 'No Barrow user found with that code.';
+  end if;
+  if target = auth.uid() then
+    raise exception 'That''s your own code.';
+  end if;
+
+  insert into public.friendships (requester_id, recipient_id, status)
+  values (auth.uid(), target, 'accepted')
+  on conflict (least(requester_id, recipient_id), greatest(requester_id, recipient_id))
+  do update set status = 'accepted', updated_at = now();
+
+  return query
+    select p.id, p.public_id, p.username, p.first_name, p.last_name, p.picture_url
+    from public.profiles p where p.id = target;
+end;
+$$;
+
+revoke all on function public.add_friend_by_public_id(text) from public;
+grant execute on function public.add_friend_by_public_id(text) to authenticated;
+
+-- Search-based add: sends a request the recipient must accept (see
+-- friendships_update_recipient above) — unless they'd already requested
+-- *me* first, in which case this just accepts that instead of creating a
+-- redundant/conflicting second pending row for the same pair.
+create or replace function public.send_friend_request(target_id uuid)
+returns public.friendships
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  existing public.friendships;
+  result public.friendships;
+begin
+  if target_id = auth.uid() then
+    raise exception 'You can''t add yourself.';
+  end if;
+  if not exists (select 1 from public.profiles where id = target_id) then
+    raise exception 'That user no longer exists.';
+  end if;
+
+  select * into existing from public.friendships
+  where least(requester_id, recipient_id) = least(auth.uid(), target_id)
+    and greatest(requester_id, recipient_id) = greatest(auth.uid(), target_id);
+
+  if existing.id is not null then
+    if existing.status = 'accepted' then
+      raise exception 'You''re already friends.';
+    elsif existing.requester_id = auth.uid() then
+      raise exception 'Friend request already sent.';
+    else
+      update public.friendships set status = 'accepted', updated_at = now()
+      where id = existing.id
+      returning * into result;
+      return result;
+    end if;
+  end if;
+
+  insert into public.friendships (requester_id, recipient_id, status)
+  values (auth.uid(), target_id, 'pending')
+  returning * into result;
+  return result;
+end;
+$$;
+
+revoke all on function public.send_friend_request(uuid) from public;
+grant execute on function public.send_friend_request(uuid) to authenticated;
+
+-- Everything the Friends screen needs to render in one call: every
+-- friendship row involving the caller, joined to the *other* party's public
+-- profile fields (blocked otherwise by profiles' select-own-only RLS), plus
+-- whether it's a pending request the caller needs to respond to (as opposed
+-- to one they sent, or an already-accepted friendship).
+create or replace function public.list_friendships()
+returns table (
+  friendship_id uuid,
+  status text,
+  is_incoming boolean,
+  other_id uuid,
+  public_id text,
+  username text,
+  first_name text,
+  last_name text,
+  picture_url text,
+  created_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    f.id,
+    f.status,
+    (f.status = 'pending' and f.recipient_id = auth.uid()),
+    p.id,
+    p.public_id,
+    p.username,
+    p.first_name,
+    p.last_name,
+    p.picture_url,
+    f.created_at
+  from public.friendships f
+  join public.profiles p on p.id = case when f.requester_id = auth.uid() then f.recipient_id else f.requester_id end
+  where auth.uid() in (f.requester_id, f.recipient_id)
+  order by f.created_at desc;
+$$;
+
+revoke all on function public.list_friendships() from public;
+grant execute on function public.list_friendships() to authenticated;
+
 -- Backfill email for any profile rows created before this column existed.
 update public.profiles p
 set email = u.email

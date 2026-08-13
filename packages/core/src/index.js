@@ -13,6 +13,8 @@ export * from "./focusSteps";
 export * from "./workoutMutations";
 export * from "./focusStorage";
 export * from "./routineShare";
+export * from "./friendShare";
+export * from "./errors";
 
 export * from "./hooks/useExerciseActions";
 export * from "./hooks/useWorkoutActions";

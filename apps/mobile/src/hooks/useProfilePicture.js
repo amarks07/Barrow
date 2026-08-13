@@ -1,6 +1,7 @@
 import { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
+import { logError } from "@barrow/core";
 import { supabase } from "../lib/supabase-client";
 
 const MAX_DIMENSION = 512;
@@ -83,7 +84,8 @@ export function useProfilePicture({ session, onUpdate }) {
 
       onUpdate("pictureUrl", data.publicUrl);
     } catch (err) {
-      setError({ title: "Couldn't upload photo", message: err?.message || "Something went wrong uploading your photo." });
+      logError("profilePicture.upload", err);
+      setError({ title: "Couldn't upload photo", message: "Something went wrong uploading your photo. Check your connection and try again." });
     } finally {
       setUploading(false);
     }
@@ -101,7 +103,8 @@ export function useProfilePicture({ session, onUpdate }) {
 
       onUpdate("pictureUrl", "");
     } catch (err) {
-      setError({ title: "Couldn't remove photo", message: err?.message || "Something went wrong removing your photo." });
+      logError("profilePicture.remove", err);
+      setError({ title: "Couldn't remove photo", message: "Something went wrong removing your photo. Check your connection and try again." });
     } finally {
       setUploading(false);
     }
