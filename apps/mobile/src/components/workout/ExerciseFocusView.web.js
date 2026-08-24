@@ -24,16 +24,20 @@ const NAV_BAR_HEIGHT = 16 + BUTTON_HEIGHT.medium;
 // mirrors ExerciseFocusView.js but renders only the active step instead of
 // a swipeable pager. Prev/Next already covered step navigation on native;
 // here they're the only way to move between steps.
-function ExercisePanel({ entry, ex, unit, workouts, workoutId, plateCalculatorEnabled, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, showName, focusSetId, focusField }) {
+function ExercisePanel({ entry, ex, unit, workouts, workoutId, routineRepRange, plateCalculatorEnabled, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, showName, focusSetId, focusField }) {
   const { tokens } = useTheme();
   const isSingle = ex.setFormat === "single";
   const lastSet = entry.sets[entry.sets.length - 1];
-  const { repLow, repHigh } = getRepRange(entry.exerciseId, workouts, workoutId);
+  const routineRange = routineRepRange(entry.exerciseId);
+  const { repLow, repHigh } = routineRange
+    ? { repLow: routineRange.min, repHigh: routineRange.max }
+    : getRepRange(entry.exerciseId, workouts, workoutId);
   const rec = !isSingle && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workoutId, repLow, repHigh) : null;
+  // First set of an entry is left blank rather than auto-filled from `rec`
+  // — see DayView's WorkoutEntryRow for the matching comment. `rec` still
+  // computed above for the "Last: ..." reference line.
   const prefill = lastSet
     ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
-    : rec
-    ? { reps: rec.recReps, weight: rec.recWeight, side: rec.side, warmup: rec.warmup }
     : null;
   const singleSet = isSingle ? entry.sets[0] : null;
 
@@ -117,7 +121,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, plateCalculatorEn
 }
 
 export function ExerciseFocusView({
-  dayWorkouts, activeWorkoutId, initialExerciseId, exercises, unit, workouts, plateCalculatorEnabled,
+  dayWorkouts, activeWorkoutId, initialExerciseId, exercises, routines, unit, workouts, plateCalculatorEnabled,
   onBack, onSetAngle, onAddSet, onUpdateSet, onRemoveSet,
   groupSupersets = true,
   onStepChange,
@@ -129,6 +133,14 @@ export function ExerciseFocusView({
   const entries = workout ? workout.entries : [];
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
   const steps = useMemo(() => buildSteps(entries, groupSupersets), [entries, groupSupersets]);
+  const linkedRoutineIds = workout?.routineIds || [];
+  const routineRepRange = (exId) => {
+    for (const rid of linkedRoutineIds) {
+      const rr = routines.find((r) => r.id === rid)?.repRanges?.[exId];
+      if (rr) return rr;
+    }
+    return null;
+  };
 
   const initialIndex = Math.max(0, steps.findIndex((step) => step.some((e) => e.exerciseId === initialExerciseId)));
   const [activeIndex, setActiveIndex] = useState(initialIndex);
@@ -209,6 +221,7 @@ export function ExerciseFocusView({
               unit={unit}
               workouts={workouts}
               workoutId={workout.id}
+              routineRepRange={routineRepRange}
               plateCalculatorEnabled={plateCalculatorEnabled}
               onSetAngle={onSetAngle}
               onAddSet={onAddSet}

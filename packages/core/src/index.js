@@ -14,6 +14,7 @@ export * from "./workoutMutations";
 export * from "./focusStorage";
 export * from "./routineShare";
 export * from "./friendShare";
+export * from "./shareLink";
 export * from "./errors";
 
 export * from "./hooks/useExerciseActions";

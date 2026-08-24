@@ -10,9 +10,9 @@ import { ConfirmActionModal } from "../ui/ConfirmActionModal";
 // premium/lock status — shown above CloudBackupSection whenever there's a
 // session, regardless of which of CloudBackupSection's own states (locked,
 // free, premium) applies.
-export function AccountSection({ cloudSync, profile }) {
+export function AccountSection({ cloudSync, profile, onSignOutClear }) {
   const { tokens } = useTheme();
-  const { session, signOut } = cloudSync;
+  const { session, signOut, hasBackupData } = cloudSync;
   const [confirming, setConfirming] = useState(false);
 
   if (!session) return null;
@@ -32,10 +32,15 @@ export function AccountSection({ cloudSync, profile }) {
       {confirming && (
         <ConfirmActionModal
           title="Sign out"
-          message="You'll need to sign in again to sync your data across devices. Data already on this device isn't affected."
+          message={
+            hasBackupData
+              ? "This clears everything stored on this device for this account — workouts, routines, custom exercises, profile, and app preferences. Signing back in will restore your workouts, routines, and profile from your cloud backup, but preferences (theme, units, etc.) reset to default."
+              : "This clears everything stored on this device for this account — workouts, routines, custom exercises, profile, and app preferences. You don't have a cloud backup, so this can't be undone."
+          }
           confirmLabel="Sign out"
           onConfirm={async () => {
             await signOut();
+            await onSignOutClear();
             setConfirming(false);
           }}
           onClose={() => setConfirming(false)}

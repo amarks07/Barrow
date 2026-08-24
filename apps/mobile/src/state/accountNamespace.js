@@ -58,7 +58,9 @@ export const ACCOUNT_DATA_KEYS = [
   "barrow:workoutTimerStartedAt",
   "barrow:countdownDurationMs",
   "barrow:countdownEndAt",
+  "barrow:countdownPausedMs",
   "barrow:focusPointer",
+  "barrow:lastSyncedAt",
 ];
 
 // Copies every currently-set guest-bucket (bare-key) value forward to
@@ -84,5 +86,22 @@ export async function claimGuestDataForAccount(accountId) {
 export async function clearGuestData() {
   for (const base of ACCOUNT_DATA_KEYS) {
     await asyncStorageAdapter.removeItem(base);
+  }
+}
+
+// Wipes accountId's entire local namespace outright — every key in
+// ACCOUNT_DATA_KEYS, rewritten to that account's namespace. Used on sign-out
+// so a signed-out account's workouts/routines/exercises/profile/preferences
+// don't linger on a shared device once nobody's authenticated as that
+// account anymore. A direct AsyncStorage wipe rather than relying solely on
+// resetting in-memory state and letting usePersistedState's normal debounced
+// save catch up: that save is 400ms behind the setState calls, and the
+// foreground-resync effect (AppStateProvider) re-reads barrow:workouts from
+// disk on every AppState "active" transition, so a stale on-disk value could
+// otherwise stomp the just-cleared in-memory state right back to what it was
+// before sign-out.
+export async function clearAccountData(accountId) {
+  for (const base of ACCOUNT_DATA_KEYS) {
+    await asyncStorageAdapter.removeItem(namespacedKey(base, accountId));
   }
 }

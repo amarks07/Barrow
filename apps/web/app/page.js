@@ -38,15 +38,35 @@ export default function Page() {
           <h2 className="display text-[16px] mb-3" style={{ color: "var(--text)" }}>
             Installing on Android
           </h2>
+          <p className="text-[12px] mb-3" style={{ color: "var(--text-dim)" }}>
+            Samsung phones only — skip this if you're not on a Galaxy device: open{" "}
+            <strong style={{ color: "var(--text)" }}>
+              Settings &gt; Security and privacy &gt; Auto Blocker
+            </strong>{" "}
+            and turn it off before downloading. Auto Blocker prevents installing apps from outside
+            the Play Store and Galaxy Store, so it will block this install while it's on. You can
+            turn it back on afterward.
+          </p>
           <ol className="text-[13px] flex flex-col gap-2" style={{ color: "var(--text-dim)" }}>
             <li>1. Tap the download button above from your phone's browser.</li>
             <li>
-              2. When Android warns about installing outside the Play Store, tap{" "}
-              <strong style={{ color: "var(--text)" }}>Settings</strong> and allow installs from
-              this app (usually your browser or Files app).
+              2. Android may warn that the file type can be harmful, or that Play Protect doesn't
+              recognize the app. Tap{" "}
+              <strong style={{ color: "var(--text)" }}>More details</strong>, then{" "}
+              <strong style={{ color: "var(--text)" }}>Install anyway</strong>.
             </li>
-            <li>3. Reopen the downloaded file and tap Install.</li>
+            <li>
+              3. If asked to allow installs from this source, tap{" "}
+              <strong style={{ color: "var(--text)" }}>Settings</strong> and allow installs from
+              this app (usually your browser or Files app), then go back and tap Install.
+            </li>
+            <li>4. Reopen the downloaded file and tap Install.</li>
           </ol>
+          <p className="mt-3 text-[11px]" style={{ color: "var(--text-dim)" }}>
+            Exact wording can vary by phone and Android version — look for a way to bypass the
+            warning ("more details," "install anyway," or similar) rather than the exact phrase
+            above.
+          </p>
         </div>
 
         <p className="mt-10 text-[11px]" style={{ color: "var(--text-dim)" }}>

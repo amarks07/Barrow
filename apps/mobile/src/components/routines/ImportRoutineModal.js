@@ -24,12 +24,17 @@ const SOURCE_OPTIONS = [
 // actually written to exercises/routines — resolveRoutineShare (from
 // @barrow/core) is pure, so the review step is free to recompute as often
 // as it likes without side effects.
-export function ImportRoutineModal({ exercises, onImport, onClose }) {
+//
+// `initialData` (already-parsed, from parseRoutineShare) skips straight to
+// the review step — used when a barrow://routine link was opened directly
+// (e.g. scanned by the phone's own camera app rather than this in-app
+// scanner) via useShareDeepLink.
+export function ImportRoutineModal({ exercises, initialData, onImport, onClose }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const [source, setSource] = useState("scan");
   const [error, setError] = useState("");
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(initialData || null);
   const [scanAttempt, setScanAttempt] = useState(0);
 
   const resolved = useMemo(() => (data ? resolveRoutineShare(data, exercises) : null), [data, exercises]);
@@ -48,7 +53,7 @@ export function ImportRoutineModal({ exercises, onImport, onClose }) {
   const pickFile = async () => {
     setError("");
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ["application/json", "text/plain", "*/*"] });
+      const result = await DocumentPicker.getDocumentAsync({ type: ["text/csv", "application/json", "text/plain", "*/*"] });
       if (result.canceled) return;
       const file = new File(result.assets[0].uri);
       handlePayload(await file.text());

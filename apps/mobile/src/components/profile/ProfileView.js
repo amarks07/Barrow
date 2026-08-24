@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePreventRemove } from "@react-navigation/native";
 import { ArrowLeft, Sparkles } from "lucide-react-native";
 import { Button } from "../ui/Button";
 import { IconBtn } from "../ui/IconBtn";
@@ -26,7 +27,7 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 // or not the user is signed in — CloudBackupSection's own signed-out state
 // carries the "Sign in/up" CTA in place of sync status, and opens
 // SignInModal (below) on tap.
-export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWorkoutData }) {
+export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWorkoutData, onSignOutClear }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState("hub"); // "hub" | "settings" | "biometrics" | "friends"
@@ -39,6 +40,11 @@ export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWork
   useEffect(() => {
     if (cloudSync.session) setShowSignIn(false);
   }, [cloudSync.session]);
+
+  // Without this, the hardware back button (Android) and the swipe-back
+  // gesture bypass `page` state entirely and pop the "Profile" route itself,
+  // dropping the user all the way back to Main instead of to the hub.
+  usePreventRemove(page !== "hub", () => setPage("hub"));
 
   if (page === "settings") {
     return <ProfileSettingsView profile={profile} onUpdate={onUpdate} onBack={() => setPage("hub")} cloudSync={cloudSync} />;
@@ -84,7 +90,7 @@ export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWork
           )}
         </View>
 
-        <AccountSection cloudSync={cloudSync} profile={profile} />
+        <AccountSection cloudSync={cloudSync} profile={profile} onSignOutClear={onSignOutClear} />
 
         <CloudBackupSection cloudSync={cloudSync} profile={profile} onSignIn={() => setShowSignIn(true)} />
 
@@ -93,7 +99,7 @@ export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWork
             <Text style={{ fontSize: 11, color: tokens.textDim }} className="mb-1">
               Profile ID
             </Text>
-            <Text style={{ fontSize: 14, color: tokens.textDim, fontVariant: ["tabular-nums"] }}>{profile.profileId}</Text>
+            <Text style={{ fontSize: 14, color: tokens.textDim, fontVariant: ["tabular-nums"] }}>{profile.profileId || "Unavailable"}</Text>
           </View>
         )}
 

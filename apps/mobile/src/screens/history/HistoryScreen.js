@@ -16,5 +16,13 @@ export function HistoryScreen({ route, navigation }) {
 
   if (!exercise) return null;
 
-  return <HistoryView exercise={exercise} workouts={workouts} unit={unit} onBack={() => navigation.goBack()} />;
+  return (
+    <HistoryView
+      exercise={exercise}
+      workouts={workouts}
+      unit={unit}
+      onBack={() => navigation.goBack()}
+      onOpenFocus={(dateKey, workoutId) => navigation.navigate("ExerciseFocus", { dateKey, workoutId, exerciseId })}
+    />
+  );
 }

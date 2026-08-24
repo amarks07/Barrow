@@ -18,6 +18,7 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 export function RoutineDetailView({
   routine, exercises, workouts, onBack, onDelete, onRename, onSelectDate,
   onAddExercise, onRemoveExercise, onAddCustomExercise, onReorderExercise, onCreateSuperset, onUngroupSuperset,
+  onSetRepRange,
 }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -156,6 +157,8 @@ export function RoutineDetailView({
                   gesture={makeRowGesture(id)}
                   onRowTap={() => handleRowTap(id)}
                   onRemove={() => onRemoveExercise(routine.id, id)}
+                  repRange={(routine.repRanges || {})[id] || null}
+                  onSetRepRange={(min, max) => onSetRepRange(routine.id, id, min, max)}
                 />
               );
             })}

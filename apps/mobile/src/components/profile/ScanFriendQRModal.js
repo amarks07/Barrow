@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CircleCheck, X } from "lucide-react-native";
@@ -14,13 +14,36 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 // step, unlike a search-based request; see add_friend_by_public_id in
 // supabase/schema.sql). `scanAttempt` remounts QRScannerView (fresh `key`)
 // so an error can be retried, same pattern as ImportRoutineModal.
-export function ScanFriendQRModal({ addByPublicId, onClose }) {
+//
+// `initialData` (already-parsed, from parseFriendShare) skips straight to
+// adding without a camera step at all — used when a barrow://friend link
+// was opened directly (e.g. scanned by the phone's own camera app rather
+// than this in-app scanner) via useShareDeepLink.
+export function ScanFriendQRModal({ addByPublicId, initialData, onClose }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const [status, setStatus] = useState("scanning"); // scanning | adding | error | added
+  const [status, setStatus] = useState(initialData ? "adding" : "scanning"); // scanning | adding | error | added
   const [error, setError] = useState("");
   const [added, setAdded] = useState(null);
   const [scanAttempt, setScanAttempt] = useState(0);
+
+  const addFriend = async (parsed) => {
+    setStatus("adding");
+    try {
+      const friend = await addByPublicId(parsed.id);
+      setAdded(friend);
+      setStatus("added");
+    } catch (e) {
+      setError(e.message || "Couldn't add that friend.");
+      setStatus("error");
+      setScanAttempt((n) => n + 1);
+    }
+  };
+
+  useEffect(() => {
+    if (initialData) addFriend(initialData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleScan = async (raw) => {
     let parsed;
@@ -33,17 +56,7 @@ export function ScanFriendQRModal({ addByPublicId, onClose }) {
       setScanAttempt((n) => n + 1);
       return;
     }
-
-    setStatus("adding");
-    try {
-      const friend = await addByPublicId(parsed.id);
-      setAdded(friend);
-      setStatus("added");
-    } catch (e) {
-      setError(e.message || "Couldn't add that friend.");
-      setStatus("error");
-      setScanAttempt((n) => n + 1);
-    }
+    addFriend(parsed);
   };
 
   return (

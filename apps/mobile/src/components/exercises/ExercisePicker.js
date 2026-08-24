@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Modal, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X } from "lucide-react-native";
+import { X, XCircle } from "lucide-react-native";
 import { CATEGORIES } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
@@ -68,15 +68,20 @@ export function ExercisePicker({
             ]}
           />
         </View>
-        <View className="px-5 pt-4 pb-2">
+        <View className="px-5 pt-4 pb-2 flex-row items-center" style={{ gap: 6 }}>
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder="Search"
             placeholderTextColor={tokens.textDim}
             className="py-1.5"
-            style={{ fontSize: 16, color: tokens.text, borderBottomWidth: 1, borderBottomColor: tokens.lineStrong }}
+            style={{ flex: 1, fontSize: 16, color: tokens.text, borderBottomWidth: 1, borderBottomColor: tokens.lineStrong }}
           />
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery("")} accessibilityLabel="Clear search" hitSlop={8}>
+              <XCircle size={18} color={tokens.textDim} />
+            </Pressable>
+          )}
         </View>
         <CategoryFilterChips value={categoryFilter} onChange={setCategoryFilter} />
         <ScrollView

@@ -109,6 +109,7 @@ export function ExerciseFocusScreen({ route, navigation }) {
       activeWorkoutId={workoutId}
       initialExerciseId={exerciseId}
       exercises={exercises}
+      routines={routines}
       unit={unit}
       workouts={workouts}
       plateCalculatorEnabled={plateCalculatorEnabled}

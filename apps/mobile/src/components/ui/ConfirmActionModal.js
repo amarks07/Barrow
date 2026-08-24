@@ -11,12 +11,26 @@ import { Button } from "./Button";
 // consequences need more explanation than ConfirmDeleteButton's inline
 // two-tap pattern can carry in a button label (e.g. "Clear workout data" in
 // DangerZoneSection). Same top-anchored slide-down treatment as
-// PremiumPlaceholderModal/ReauthModal. `onConfirm` may be async — the
-// confirm button disables itself and shows "…" while it resolves.
-export function ConfirmActionModal({ title, message, confirmLabel = "Continue", cancelLabel = "Cancel", onConfirm, onClose }) {
+// PremiumPlaceholderModal/ReauthModal. `onConfirm`/`onExtra` may be async —
+// whichever button was pressed disables itself and shows "…" while it
+// resolves (the other stays disabled too, so a slow action can't be
+// double-fired via the other button). `extraLabel`/`onExtra` are optional —
+// pass both together for a rare three-way choice (e.g. the account-conflict
+// prompt's "Merge"); every other call site only needs confirm/cancel.
+export function ConfirmActionModal({
+  title,
+  message,
+  confirmLabel = "Continue",
+  cancelLabel = "Cancel",
+  extraLabel,
+  onConfirm,
+  onClose,
+  onExtra,
+}) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState(null);
+  const busy = busyAction !== null;
 
   const slideAnim = useRef(new Animated.Value(-1000)).current;
   useEffect(() => {
@@ -24,11 +38,20 @@ export function ConfirmActionModal({ title, message, confirmLabel = "Continue", 
   }, [slideAnim]);
 
   const confirm = async () => {
-    setBusy(true);
+    setBusyAction("confirm");
     try {
       await onConfirm();
     } finally {
-      setBusy(false);
+      setBusyAction(null);
+    }
+  };
+
+  const extra = async () => {
+    setBusyAction("extra");
+    try {
+      await onExtra();
+    } finally {
+      setBusyAction(null);
     }
   };
 
@@ -57,8 +80,11 @@ export function ConfirmActionModal({ title, message, confirmLabel = "Continue", 
         </Text>
         <View className="flex-row items-center justify-between mt-1">
           <Button label={cancelLabel} onPress={onClose} size="small" disabled={busy} />
+          {extraLabel && (
+            <Button label={busyAction === "extra" ? "…" : extraLabel} onPress={extra} disabled={busy} size="small" />
+          )}
           <Button
-            label={busy ? "…" : confirmLabel}
+            label={busyAction === "confirm" ? "…" : confirmLabel}
             onPress={confirm}
             disabled={busy}
             variant="solid"

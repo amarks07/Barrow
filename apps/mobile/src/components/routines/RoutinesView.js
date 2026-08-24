@@ -60,8 +60,8 @@ export function RoutinesView({
         <RoutineBuilder
           exercises={exercises}
           onClose={() => setShowBuilder(false)}
-          onSave={(name, ids, supersets) => {
-            onCreate(name, ids, supersets);
+          onSave={(name, ids, supersets, repRanges) => {
+            onCreate(name, ids, supersets, repRanges);
             setShowBuilder(false);
           }}
           onAddCustomExercise={onAddCustomExercise}

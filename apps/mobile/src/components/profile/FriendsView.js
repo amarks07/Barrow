@@ -105,10 +105,10 @@ export function FriendsView({ session, profile, onBack }) {
           Profile ID
         </Text>
         <Text style={{ fontSize: 14, color: tokens.textDim, fontVariant: ["tabular-nums"] }} className="mb-4">
-          {profile.profileId}
+          {profile.profileId || "Unavailable"}
         </Text>
 
-        <View className="flex-row gap-3 mb-6">
+        <View className="flex-row justify-between mb-6">
           <Button label="My QR code" onPress={() => setShowShareQR(true)} icon={<QrCode size={15} color={tokens.textDim} />} size="medium" />
           <Button
             label="Scan a QR code"

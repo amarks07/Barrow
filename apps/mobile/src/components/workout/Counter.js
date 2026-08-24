@@ -65,17 +65,36 @@ export const Counter = forwardRef(function Counter({ label, value, onInc, onDec,
         className="flex-1 items-center justify-center"
         {...(onPress ? { onPress, accessibilityLabel: `Edit ${label}` } : {})}
       >
-        <TextInput
-          ref={ref}
-          keyboardType="decimal-pad"
-          value={text}
-          onChangeText={handleChangeText}
-          onBlur={handleBlur}
-          editable={!onPress}
-          pointerEvents={onPress ? "none" : "auto"}
-          className="w-full text-center"
-          style={{ fontSize: COUNTER_VALUE_FONT_SIZE[size], fontWeight: "700", color: tokens.text, fontVariant: ["tabular-nums"], padding: 0 }}
-        />
+        {onPress ? (
+          // A plain Text, not a non-editable TextInput: on Android, an
+          // EditText calls requestDisallowInterceptTouchEvent on touch-down
+          // purely for being a text-editor class — editable={false} and
+          // pointerEvents="none" don't stop that (see
+          // software-mansion/react-native-gesture-handler#2112). Since this
+          // Counter always sits inside a horizontally-swiping PagerView
+          // (DayScreen/ExerciseFocusView page between days/exercises), that
+          // swallows the touch stream before the native pager ever sees the
+          // drag, so a swipe starting here does nothing instead of turning
+          // the page. This mode never lets you type into it anyway (tapping
+          // opens CounterEditModal/WeightEditModal instead) — a Text renders
+          // identically with none of the native EditText behavior.
+          <Text
+            className="w-full text-center"
+            style={{ fontSize: COUNTER_VALUE_FONT_SIZE[size], fontWeight: "700", color: tokens.text, fontVariant: ["tabular-nums"] }}
+          >
+            {text}
+          </Text>
+        ) : (
+          <TextInput
+            ref={ref}
+            keyboardType="decimal-pad"
+            value={text}
+            onChangeText={handleChangeText}
+            onBlur={handleBlur}
+            className="w-full text-center"
+            style={{ fontSize: COUNTER_VALUE_FONT_SIZE[size], fontWeight: "700", color: tokens.text, fontVariant: ["tabular-nums"], padding: 0 }}
+          />
+        )}
         <Text style={{ fontFamily: FONT_DISPLAY, fontSize: COUNTER_LABEL_FONT_SIZE[size], color: tokens.textDim, lineHeight: COUNTER_LABEL_FONT_SIZE[size] + 2 }}>{label}</Text>
       </ValueWrapper>
 

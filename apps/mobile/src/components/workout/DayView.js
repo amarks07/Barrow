@@ -353,6 +353,16 @@ export function DayView({
     () => routines.filter((r) => linkedRoutineIds.includes(r.id)),
     [routines, linkedRoutineIds]
   );
+  // A routine's own target rep range (set in RoutineDetailView/RoutineBuilder)
+  // takes priority over the history-derived range below — first linked
+  // routine that defines one for this exercise wins.
+  const routineRepRange = (exId) => {
+    for (const r of linkedRoutines) {
+      const rr = r.repRanges?.[exId];
+      if (rr) return rr;
+    }
+    return null;
+  };
   const hasAnyGroup = entries.some((e) => e.supersetId);
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
   // Group membership only counts entries that actually render — an entry
@@ -664,12 +674,17 @@ export function DayView({
           const isSingle = ex.setFormat === "single";
           const isOpen = workoutView !== "focus" && openExerciseId === entry.exerciseId;
           const lastSet = entry.sets[entry.sets.length - 1];
-          const { repLow, repHigh } = getRepRange(entry.exerciseId, workouts, workout.id);
+          const routineRange = routineRepRange(entry.exerciseId);
+          const { repLow, repHigh } = routineRange
+            ? { repLow: routineRange.min, repHigh: routineRange.max }
+            : getRepRange(entry.exerciseId, workouts, workout.id);
           const rec = !isSingle && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workout.id, repLow, repHigh) : null;
+          // The very first set of an entry is left blank rather than
+          // auto-filled from `rec` — only a same-session prior set (lastSet)
+          // prefills the next one. `rec` is still computed above so the
+          // "Last: ..." reference line in WorkoutEntryRow has something to show.
           const prefill = lastSet
             ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
-            : rec
-            ? { reps: rec.recReps, weight: rec.recWeight, side: rec.side, warmup: rec.warmup }
             : null;
 
           const isDragging = draggingGroupIds.has(entry.exerciseId);
@@ -815,7 +830,7 @@ export function DayView({
       {showRoutines && (
         <View className="absolute" style={{ top: 0, left: 0, right: 0, bottom: 0, zIndex: 30, backgroundColor: tokens.bg }}>
           <View
-            className="flex-row items-center gap-3 px-5 pb-4"
+            className="flex-row items-center gap-3 px-5 pt-4 pb-4"
             style={{ borderBottomWidth: 1.5, borderBottomColor: tokens.line }}
           >
             <IconBtn label="Close" onPress={() => setShowRoutines(false)}>

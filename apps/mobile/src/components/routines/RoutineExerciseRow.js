@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Check, GripVertical, X } from "lucide-react-native";
 import { exerciseMeta } from "@barrow/core";
 import { Card } from "../ui/Card";
+import { RepRangeModal } from "./RepRangeModal";
 
 const SHIFT_ANIM_MS = 180;
 
@@ -17,8 +18,10 @@ const SHIFT_ANIM_MS = 180;
 export function RoutineExerciseRow({
   ex, tokens, run, supersetMode, removeSupersetMode, isSelected,
   isDragging, dragOffsetY, shiftY, refCallback, gesture, onRowTap, onRemove,
+  repRange, onSetRepRange,
 }) {
   const shiftShared = useSharedValue(0);
+  const [showRangeModal, setShowRangeModal] = useState(false);
 
   useEffect(() => {
     if (isDragging) return;
@@ -81,6 +84,13 @@ export function RoutineExerciseRow({
                   <Text style={{ fontSize: 10, color: tokens.textDim, marginTop: 2 }} numberOfLines={1}>
                     {exerciseMeta(ex)}
                   </Text>
+                  {onSetRepRange && (
+                    <Pressable onPress={() => setShowRangeModal(true)} hitSlop={6} style={{ marginTop: 3, alignSelf: "flex-start" }}>
+                      <Text style={{ fontSize: 10, color: repRange ? tokens.accent : tokens.textDim }}>
+                        {repRange ? `${repRange.min}–${repRange.max} reps` : "+ rep range"}
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               </View>
             </GestureDetector>
@@ -133,6 +143,23 @@ export function RoutineExerciseRow({
           )}
         </View>
       </View>
+
+      {showRangeModal && (
+        <RepRangeModal
+          exerciseName={ex.name}
+          min={repRange?.min ?? null}
+          max={repRange?.max ?? null}
+          onSave={(min, max) => {
+            onSetRepRange(min, max);
+            setShowRangeModal(false);
+          }}
+          onClear={() => {
+            onSetRepRange(null, null);
+            setShowRangeModal(false);
+          }}
+          onClose={() => setShowRangeModal(false)}
+        />
+      )}
     </Animated.View>
   );
 }

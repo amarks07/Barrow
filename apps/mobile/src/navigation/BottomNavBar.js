@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme/ThemeProvider";
+import { useAppState } from "../state/AppStateProvider";
 import { FONT_DISPLAY } from "../theme/fonts";
 
 // Custom tabBar for the material-top-tabs Tabs navigator (rendered at the
@@ -12,11 +13,22 @@ import { FONT_DISPLAY } from "../theme/fonts";
 export function BottomNavBar({ state, descriptors, navigation }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  // LastSyncedFooter (App.js) renders as a real sibling below the whole
+  // navigator, not an overlay, so once it's showing it — not this bar — is
+  // what's actually flush against the physical bottom edge and needs the
+  // insets.bottom clearance. Adding insets.bottom here too would stack a
+  // second device-safe-area gap on top of the footer's own, which is what
+  // read as "a lot of padding" between the tabs and the sync readout.
+  // Falls back to the old full clearance when nothing renders below (no
+  // footer yet — e.g. a guest who's never synced), so the tab bar still
+  // clears the home indicator/gesture bar on its own in that case.
+  const { lastSyncedAt } = useAppState();
+  const bottomPadding = lastSyncedAt ? 24 : 24 + insets.bottom;
 
   return (
     <View
       className="flex-row items-center justify-around"
-      style={{ backgroundColor: tokens.bg, borderTopWidth: 1.5, borderTopColor: tokens.line, paddingTop: 12, paddingBottom: 24 + insets.bottom }}
+      style={{ backgroundColor: tokens.bg, borderTopWidth: 1.5, borderTopColor: tokens.line, paddingTop: 12, paddingBottom: bottomPadding }}
     >
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];

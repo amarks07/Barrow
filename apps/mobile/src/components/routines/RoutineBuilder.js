@@ -7,6 +7,7 @@ import { groupContiguous, groupIndexOf, pruneGroups, runInfo } from "@barrow/cor
 import { ExercisePicker } from "../exercises/ExercisePicker";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
+import { RepRangeModal } from "./RepRangeModal";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
@@ -18,6 +19,8 @@ export function RoutineBuilder({ exercises, onClose, onSave, onAddCustomExercise
   const [name, setName] = useState("");
   const [picked, setPicked] = useState([]);
   const [supersets, setSupersets] = useState([]);
+  const [repRanges, setRepRanges] = useState({});
+  const [rangeModalExId, setRangeModalExId] = useState(null);
   const [supersetMode, setSupersetMode] = useState(false);
   const [supersetSelection, setSupersetSelection] = useState([]);
   const [removeSupersetMode, setRemoveSupersetMode] = useState(false);
@@ -38,6 +41,20 @@ export function RoutineBuilder({ exercises, onClose, onSave, onAddCustomExercise
     const next = picked.filter((p) => p !== id);
     setPicked(next);
     setSupersets((prev) => pruneGroups(prev, next));
+    setRepRanges((prev) => {
+      const { [id]: _removed, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const setExerciseRepRange = (id, min, max) => {
+    setRepRanges((prev) => {
+      if (min == null && max == null) {
+        const { [id]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [id]: { min, max } };
+    });
   };
 
   const cancelSuperset = () => {
@@ -159,9 +176,18 @@ export function RoutineBuilder({ exercises, onClose, onSave, onAddCustomExercise
                                 {isSelected && <Check size={12} color="#121214" />}
                               </View>
                             )}
-                            <Text style={{ fontSize: 14, color: tokens.text }} numberOfLines={1}>
-                              {exMap[id]?.name}
-                            </Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 14, color: tokens.text }} numberOfLines={1}>
+                                {exMap[id]?.name}
+                              </Text>
+                              {!supersetMode && !removeSupersetMode && (
+                                <Pressable onPress={() => setRangeModalExId(id)} hitSlop={6} style={{ marginTop: 2, alignSelf: "flex-start" }}>
+                                  <Text style={{ fontSize: 10, color: repRanges[id] ? tokens.accent : tokens.textDim }}>
+                                    {repRanges[id] ? `${repRanges[id].min}–${repRanges[id].max} reps` : "+ rep range"}
+                                  </Text>
+                                </Pressable>
+                              )}
+                            </View>
                           </View>
                           {!supersetMode && !removeSupersetMode && (
                             <Pressable onPress={() => removePicked(id)} focusable={false} accessibilityLabel="Remove from routine" hitSlop={8}>
@@ -224,7 +250,7 @@ export function RoutineBuilder({ exercises, onClose, onSave, onAddCustomExercise
             <Button label="Cancel" onPress={onClose} size="medium" />
             <Button
               label="Save"
-              onPress={() => canSave && onSave(name.trim(), picked, supersets)}
+              onPress={() => canSave && onSave(name.trim(), picked, supersets, repRanges)}
               disabled={!canSave}
               variant="solid"
               size="medium"
@@ -232,6 +258,23 @@ export function RoutineBuilder({ exercises, onClose, onSave, onAddCustomExercise
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
+
+      {rangeModalExId && (
+        <RepRangeModal
+          exerciseName={exMap[rangeModalExId]?.name}
+          min={repRanges[rangeModalExId]?.min ?? null}
+          max={repRanges[rangeModalExId]?.max ?? null}
+          onSave={(min, max) => {
+            setExerciseRepRange(rangeModalExId, min, max);
+            setRangeModalExId(null);
+          }}
+          onClear={() => {
+            setExerciseRepRange(rangeModalExId, null, null);
+            setRangeModalExId(null);
+          }}
+          onClose={() => setRangeModalExId(null)}
+        />
+      )}
 
       {showPicker && (
         <ExercisePicker

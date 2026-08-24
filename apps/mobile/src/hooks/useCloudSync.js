@@ -11,6 +11,12 @@ import { claimGuestDataForAccount, clearGuestData } from "../state/accountNamesp
 const DEBOUNCE_MS = 1500;
 const BIOMETRIC_KEY = "barrow:biometricEnabled";
 const BIOMETRIC_ASKED_KEY = "barrow:biometricAsked";
+// How long to wait before offering the biometric-unlock prompt, both after
+// the app starts and after a fresh sign-in finishes syncing — long enough
+// that it never lands on top of the sign-in/sign-up UI still closing (which
+// read as the prompt appearing before the user had actually finished
+// signing in).
+const BIOMETRIC_PROMPT_DELAY_MS = 10000;
 
 // Supabase sometimes surfaces a failure (most often the auth server failing
 // to send an email through a misconfigured custom SMTP provider) as an
@@ -118,12 +124,16 @@ function toWorkoutLogRows(userId, workoutsObj, dateKeys) {
   }));
 }
 
-// Same phone-wins-unless-blank idea as mergeById/mergeWorkouts, but for a
-// single scalar field (used for the profile's identity fields) rather than
-// a collection: the local value wins whenever it's non-blank, and the
-// cloud's value only fills in when the local one is null/undefined/"".
-function preferLocal(localValue, cloudValue) {
-  return localValue === null || localValue === undefined || localValue === "" ? cloudValue : localValue;
+// For the profile's identity/biometric fields (a single scalar per field,
+// unlike the id-keyed collections mergeById/mergeWorkouts handle): the
+// cloud's value wins whenever it's actually set, since the profiles row is
+// the cross-device source of truth for these — a blank/default local value
+// on a device that's never synced this account before (or a leftover value
+// from using this device as a guest before signing in) must never outrank
+// real cloud data. Local only fills in when the cloud field itself is
+// blank/null, e.g. before this account's first push has ever landed.
+function preferCloud(localValue, cloudValue) {
+  return cloudValue === null || cloudValue === undefined || cloudValue === "" ? localValue : cloudValue;
 }
 
 // True if the currently-active local namespace holds anything a stranger
@@ -171,6 +181,13 @@ export function useCloudSync({
   // for why a namespace switch must wait on localDataHydrated before
   // syncSession reads workouts/exercises/etc.
   activeAccountId, switchActiveAccount, localDataHydrated,
+  // Stamped (Date.now()) after every successful push/pull below, so
+  // LastSyncedFooter can show a "last synced" readout that's accurate
+  // across app restarts. Owned by AppStateProvider (persisted, namespaced
+  // per account like everything else) rather than local state here, since
+  // it needs to survive this hook's own remounts and be readable outside
+  // cloudSync's return value.
+  setLastSyncedAt,
 }) {
   const [session, setSession] = useState(null);
   const [status, setStatus] = useState("idle"); // idle | authenticating | confirm-email | reset-email-sent | syncing | synced | premium-required | error
@@ -269,9 +286,10 @@ export function useCloudSync({
   // correctly reads as "not fresh" instead of leaving a stale true flag
   // that a later cold start would misread as its own fresh sign-in.
   const justSignedInRef = useRef(false);
-  // Set alongside justSignedInRef specifically by signUp (see below) when a
-  // brand-new account gets an immediate session (no email confirmation
-  // required) — distinguishes "just created an account" from "just signed
+  // Set alongside justSignedInRef by signUp (see below) when a brand-new
+  // account gets an immediate session (no email confirmation required), and
+  // by signInWithGoogle's markIfFreshGoogleSignUp for a brand-new Google
+  // identity — distinguishes "just created an account" from "just signed
   // into an existing one" for the pull-gate effect below: guest data has no
   // prior owner, so a fresh sign-up silently adopts it instead of raising
   // the same conflict prompt a sign-in into an *existing*, different
@@ -282,6 +300,34 @@ export function useCloudSync({
   // its own (it opens a browser and comes back later via deep link) — the
   // effect that watches for the resulting session checks and clears this.
   const oauthReauthPendingRef = useRef(false);
+
+  // Re-checked at fire time (10s after whichever event scheduled it) rather
+  // than when scheduled, since state can move on a lot in that window —
+  // reassigned every render so the closure always sees the latest
+  // session/status/biometricEnabled/biometricPromptVisible instead of
+  // whatever they were back when the timer was set. Two callers below both
+  // delay by BIOMETRIC_PROMPT_DELAY_MS before calling this: once on mount
+  // (covers a restored/cached session that was never offered the prompt)
+  // and once after a fresh sign-in finishes syncing (see justSignedInRef in
+  // syncSession). status === "authenticating" covers every in-flight
+  // sign-in/sign-up/OAuth/reauth call, so the prompt never pops up on top of
+  // one of those.
+  const maybeShowBiometricPromptRef = useRef(() => {});
+  maybeShowBiometricPromptRef.current = async () => {
+    if (Platform.OS === "web" || !session || biometricEnabled || biometricPromptVisible || status === "authenticating") return;
+    const alreadyAsked = (await AsyncStorage.getItem(BIOMETRIC_ASKED_KEY)) === "true";
+    if (alreadyAsked) return;
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+    if (hasHardware && isEnrolled) setBiometricPromptVisible(true);
+  };
+
+  // "10 seconds after the app starts" half of the biometric-prompt timing —
+  // the other half (10s after a fresh sign-in) lives in syncSession, below.
+  useEffect(() => {
+    const t = setTimeout(() => maybeShowBiometricPromptRef.current(), BIOMETRIC_PROMPT_DELAY_MS);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(BIOMETRIC_KEY).then((v) => setBiometricEnabledState(v === "true"));
@@ -336,7 +382,7 @@ export function useCloudSync({
   // in-flight run; only the automatic pull-gate effect needs that — the
   // manual unlock paths (unlockSync/reauthenticateWithPassword/the OAuth
   // completion effect) are one-off user actions with nothing to race.
-  const syncSession = async (sess, cancelledRef) => {
+  const syncSession = async (sess, cancelledRef, retryCount = 0) => {
     setStatus("syncing");
     // Held for the whole fetch-and-apply window below, not just around the
     // setProfile/setExercises/etc. calls — the debounced push effect races
@@ -369,6 +415,20 @@ export function useCloudSync({
       if (fetchError || workoutRowsError) {
         setError(friendlyAuthError("cloudSync.pull", fetchError || workoutRowsError));
         setStatus("error");
+        // The profiles SELECT uses .single(), which errors if the
+        // handle_new_user trigger (supabase/schema.sql) hasn't finished
+        // inserting the row yet — a real race right after signup, not just
+        // a flaky network. Left unretried, this account's profile (public_id
+        // in particular) would stay stuck behind DEFAULT_PROFILE's blank
+        // placeholder for the rest of the app session, since the pull-gate
+        // effect's syncedUserIdRef guard prevents it from ever calling this
+        // again for the same session object. A few short, bounded retries
+        // covers both cases without hammering the network indefinitely.
+        if (!cancelledRef?.current && retryCount < 3) {
+          setTimeout(() => {
+            if (!cancelledRef?.current) syncSession(sess, cancelledRef, retryCount + 1);
+          }, 3000 * (retryCount + 1));
+        }
         return;
       }
 
@@ -376,15 +436,24 @@ export function useCloudSync({
       // premium-gated cloud sync — every account gets one at signup (see
       // handle_new_user/generate_public_id in supabase/schema.sql)
       // regardless of premium status, so it always overwrites the
-      // locally-generated placeholder from DEFAULT_PROFILE.
+      // locally-generated placeholder from DEFAULT_PROFILE. `|| p.profileId`
+      // guards against a not-yet-backfilled row's default '' (see the
+      // profiles.public_id backfill in supabase/schema.sql) blanking out a
+      // real id this device already has cached locally instead of just
+      // leaving it alone until the backfill runs.
       //
-      // pictureUrl is also pulled unconditionally, unlike the other identity
-      // fields below: uploading a profile picture is available to every
-      // signed-in user (not premium-gated — see set_profile_picture_url in
-      // supabase/schema.sql), so a non-premium user's picture needs to sync
-      // across devices too even though their name/username/etc. stay
-      // local-only. Same phone-wins-unless-blank merge as those fields.
-      setProfile((p) => ({ ...p, profileId: data.public_id, pictureUrl: preferLocal(p.pictureUrl, data.picture_url) }));
+      // pictureUrl is also pulled unconditionally (not preferCloud, unlike
+      // the debounced identity fields below): uploading/removing a picture
+      // (useProfilePicture.js) commits to the profiles row via a synchronous
+      // RPC *before* it ever touches local state, so the cloud value is
+      // never behind whatever's on the phone — there's no "local edit not
+      // pushed yet" window here that a fallback-to-local rule would need to
+      // protect. Trusting the cloud unconditionally is also what correctly
+      // clears a picture removed elsewhere (the profiles.picture_url column
+      // defaults to '' and is never null, so preferCloud's "blank cloud
+      // value falls back to local" rule would otherwise keep showing the
+      // phone's stale cached picture instead of clearing it).
+      setProfile((p) => ({ ...p, profileId: data.public_id || p.profileId, pictureUrl: data.picture_url }));
 
       // Computed regardless of premium (both fetches above run unconditionally)
       // so a non-premium account's leftover backup from before a downgrade —
@@ -395,22 +464,26 @@ export function useCloudSync({
 
       // The remaining profile identity/biometric fields (name/username/
       // birthday/gender/height/weight) sync for every account, premium or
-      // not — only backup_data (below) is a premium entitlement. Same
-      // phone-wins merge as exercises/routines/workouts/unit: keep
-      // whatever's already on the phone unless that field is blank there,
-      // in which case fall back to the cloud's value. Without this, a
-      // null/blank cloud field would clobber a populated phone value on
-      // every sign-in/re-sync.
+      // not — only backup_data (below) is a premium entitlement. Cloud wins
+      // whenever it actually has a value (see preferCloud above); local only
+      // fills in a field the cloud doesn't have yet. This still round-trips
+      // normally: any local edit made after this pull flows back up via the
+      // debounced push effect below like always, and the *next* pull just
+      // finds it already matching. What this prevents is a device that's
+      // never synced this account before — a brand-new phone, or one that
+      // was used as a guest first and picked up placeholder values — from
+      // clobbering the account's real cloud profile with blank/wrong local
+      // values on sign-in.
       setProfile((p) => ({
         ...p,
-        firstName: preferLocal(p.firstName, data.first_name),
-        lastName: preferLocal(p.lastName, data.last_name),
-        username: preferLocal(p.username, data.username),
+        firstName: preferCloud(p.firstName, data.first_name),
+        lastName: preferCloud(p.lastName, data.last_name),
+        username: preferCloud(p.username, data.username),
         email: sess.user.email,
-        birthday: preferLocal(p.birthday, data.birthday === null ? "" : data.birthday),
-        gender: preferLocal(p.gender, data.gender),
-        height: preferLocal(p.height, data.height === null ? "" : String(data.height)),
-        weight: preferLocal(p.weight, data.weight === null ? "" : String(data.weight)),
+        birthday: preferCloud(p.birthday, data.birthday === null ? "" : data.birthday),
+        gender: preferCloud(p.gender, data.gender),
+        height: preferCloud(p.height, data.height === null ? "" : String(data.height)),
+        weight: preferCloud(p.weight, data.weight === null ? "" : String(data.weight)),
         // Entitlement flag, not a user-editable field — pulled from the db
         // as the source of truth (set via billing/admin) but deliberately
         // left out of the push payload below so a stale local value can
@@ -540,20 +613,19 @@ export function useCloudSync({
     } finally {
       isApplyingRemoteRef.current = false;
     }
+    setLastSyncedAt?.(Date.now());
 
-    // Offer biometric unlock right after an explicit sign-in, once, if
-    // it's not already on and the device can actually do it (no point
-    // offering it on web or a device/emulator with no biometrics
-    // enrolled). Not on native's cold-start session restore — see
-    // justSignedInRef's own comment.
+    // Offer biometric unlock some time after an explicit sign-in, once, if
+    // it's not already on and the device can actually do it. Not on
+    // native's cold-start session restore — see justSignedInRef's own
+    // comment. Delayed rather than fired immediately (see
+    // BIOMETRIC_PROMPT_DELAY_MS/maybeShowBiometricPromptRef above) so it
+    // never lands right on top of the sign-in modal still closing.
     if (justSignedInRef.current) {
       justSignedInRef.current = false;
-      const alreadyAsked = (await AsyncStorage.getItem(BIOMETRIC_ASKED_KEY)) === "true";
-      if (!alreadyAsked && !biometricEnabled && Platform.OS !== "web") {
-        const hasHardware = await LocalAuthentication.hasHardwareAsync();
-        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-        if (!cancelledRef?.current && hasHardware && isEnrolled) setBiometricPromptVisible(true);
-      }
+      setTimeout(() => {
+        if (!cancelledRef?.current) maybeShowBiometricPromptRef.current();
+      }, BIOMETRIC_PROMPT_DELAY_MS);
     }
   };
 
@@ -640,11 +712,24 @@ export function useCloudSync({
     return () => {
       cancelledRef.current = true;
     };
-    // Only re-run when the session/recovery/hydration/active-namespace state
-    // changes — not on every local edit, which is handled by the push
-    // effect below.
+    // Deliberately keyed on session?.user?.id, not `session` itself: on a
+    // cold start, supabase.auth.getSession() and onAuthStateChange's
+    // INITIAL_SESSION each independently re-read and JSON.parse the
+    // persisted session from AsyncStorage (see auth-js's __loadSession), so
+    // `session` state gets set twice in quick succession with two different
+    // object references for the very same signed-in user. Depending on the
+    // object itself made this effect's cleanup fire mid-flight — while
+    // attemptUnlock below was still awaiting the Face ID/fingerprint prompt
+    // — which set the first run's cancelledRef, and the second run then
+    // no-op'd on the syncedUserIdRef guard (same user, already claimed) without
+    // starting a replacement attemptUnlock. The biometric check would then
+    // succeed against a prompt nothing was still listening to: syncLocked
+    // stayed stuck true until a manual "Unlock to sync" from Profile. Only
+    // re-run when the signed-in user, recovery/hydration state, or active
+    // namespace actually changes — not on every local edit (handled by the
+    // push effect below) or same-user session refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, recoveryMode, localDataHydrated, activeAccountId]);
+  }, [session?.user?.id, recoveryMode, localDataHydrated, activeAccountId]);
 
   // Finishes what the effect above started whenever it switched namespaces
   // mid-flow: switchActiveAccount changes the keys every usePersistedState
@@ -668,9 +753,17 @@ export function useCloudSync({
   // Resolves the "this device has data from another account" prompt.
   // "replace" wipes the guest bucket outright (the offer's "otherwise the
   // data will be wiped" — a deliberate, user-chosen action, not a silent
-  // side effect) and proceeds as the incoming account; "cancel" backs the
-  // just-authenticated attempt out entirely, leaving the guest bucket (and
-  // whoever's actually using this device) untouched.
+  // side effect) and proceeds as the incoming account; "merge" instead
+  // claims the guest bucket into the incoming account's namespace exactly
+  // like a fresh sign-up would (claimGuestDataForAccount), then lets the
+  // normal post-switch sync's mergeById/mergeWorkouts (local wins on a
+  // matching id, cloud fills in anything local doesn't have) reconcile it
+  // against that account's actual cloud backup — safe because this is the
+  // common "signing into an existing account on a device it's never used
+  // before" case, so there's no local data already sitting under the
+  // incoming account's own namespace for the claim to clobber; "cancel"
+  // backs the just-authenticated attempt out entirely, leaving the guest
+  // bucket (and whoever's actually using this device) untouched.
   const resolveAccountConflict = async (action) => {
     const pending = pendingConflictRef.current;
     if (!pending) return;
@@ -684,7 +777,8 @@ export function useCloudSync({
     }
 
     const incomingId = pending.session.user.id;
-    await clearGuestData();
+    if (action === "merge") await claimGuestDataForAccount(incomingId);
+    else await clearGuestData();
     await switchActiveAccount(incomingId);
     if (pending.cancelledRef.current) return;
     setSyncLocked(false);
@@ -753,9 +847,12 @@ export function useCloudSync({
     setStatus(anyError ? "error" : "synced");
     if (anyError) {
       setError(friendlyAuthError("cloudSync.push", anyError));
-    } else if (profile.premium) {
-      setHasBackupData(true);
-      workoutsBaselineRef.current = workouts;
+    } else {
+      setLastSyncedAt?.(Date.now());
+      if (profile.premium) {
+        setHasBackupData(true);
+        workoutsBaselineRef.current = workouts;
+      }
     }
   };
 
@@ -803,9 +900,12 @@ export function useCloudSync({
   // reset to a blank signed-out placeholder via resetProfile: those fields
   // belong to the account that was just deleted, `pictureUrl` in particular
   // points at an S3 object that no longer exists, and leaving any of them
-  // set would otherwise leak into a *different* account signing in later on
-  // this device, since syncSession's preferLocal merge keeps whatever
-  // non-blank value is already sitting in local `profile` state.
+  // set would otherwise leak into a *different*, blank-profiled account
+  // signing in later on this device, since syncSession's preferCloud merge
+  // only overwrites a field when the incoming account's cloud value is
+  // itself non-blank — a brand-new account's blank fields would otherwise
+  // fall back to whatever stale value is still sitting in local `profile`
+  // state.
   // Returns the failure message on error (for the caller to show, e.g. via
   // ErrorModal — DangerZoneSection is the only caller) and undefined on
   // success, rather than surfacing the failure itself: this hook has no UI
@@ -912,6 +1012,25 @@ export function useCloudSync({
     }
   };
 
+  // Unlike password signUp (which gets an explicit "already registered"
+  // signal, see alreadyRegistered above), Supabase's OAuth code exchange
+  // resolves the same way whether the Google identity is brand new or has
+  // signed in before — there's no boolean anywhere in the response. The
+  // standard workaround: a brand-new user's created_at and last_sign_in_at
+  // land within the same request (milliseconds apart); a returning user's
+  // created_at predates this sign-in by however long it's been since they
+  // first signed up. A few seconds of slack absorbs clock skew/round-trip
+  // time while still telling the two cases apart. Mirrors what
+  // justSignedUpRef is for in signUp() — read by the pull-gate effect below
+  // to silently claim guest data instead of raising the "this device has
+  // data from another account" conflict prompt.
+  function markIfFreshGoogleSignUp(user) {
+    if (!user?.created_at || !user?.last_sign_in_at) return;
+    const createdMs = new Date(user.created_at).getTime();
+    const lastSignInMs = new Date(user.last_sign_in_at).getTime();
+    if (Math.abs(lastSignInMs - createdMs) < 5000) justSignedUpRef.current = true;
+  }
+
   // Browser-based OAuth: on native, opens a system browser tab/Custom Tab
   // for Google's consent screen (expo-web-browser), then exchanges the
   // returned PKCE code directly — same mechanism as the password-reset deep
@@ -971,10 +1090,12 @@ export function useCloudSync({
       setStatus("error");
       return;
     }
-    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(queryParams.code);
+    const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(queryParams.code);
     if (exchangeError) {
       setError(friendlyAuthError("cloudSync.signInWithGoogle.exchange", exchangeError));
       setStatus("error");
+    } else {
+      markIfFreshGoogleSignUp(exchangeData?.user);
     }
     // On success, the auth-state-change listener sets `session` and the
     // pull-on-sign-in effect above takes it from there.

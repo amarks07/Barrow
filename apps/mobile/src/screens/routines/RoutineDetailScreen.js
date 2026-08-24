@@ -37,6 +37,7 @@ export function RoutineDetailScreen({ route, navigation }) {
       onReorderExercise={(draggedExId, targetExId) => routineActions.reorderRoutineExercise(routine.id, draggedExId, targetExId)}
       onCreateSuperset={(exIds) => routineActions.createRoutineSuperset(routine.id, exIds)}
       onUngroupSuperset={(groupIndex) => routineActions.ungroupRoutineSuperset(routine.id, groupIndex)}
+      onSetRepRange={routineActions.setRoutineRepRange}
     />
   );
 }

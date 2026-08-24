@@ -1,4 +1,5 @@
 import { slug } from "./slug";
+import { buildShareLink, unwrapShareLink } from "./shareLink";
 
 export const ROUTINE_SHARE_TYPE = "barrow-routine";
 export const ROUTINE_SHARE_VERSION = 1;
@@ -27,14 +28,28 @@ export function buildRoutineShare(routine, exercises) {
   };
 }
 
-// Parses+validates a share payload (raw JSON text or an already-parsed
-// object, since it comes from either a scanned QR string or a read file).
-// Throws a message fit to show the user directly — used to reject
-// malformed files or QR codes that aren't a Barrow routine at all.
+// What actually goes into the routine QR code: buildRoutineShare's JSON
+// wrapped in a barrow:// deep link, so scanning it with the phone's own
+// camera app (not just Barrow's in-app scanner) opens the app straight to
+// importing it — see useShareDeepLink, the receiving end.
+export function buildRoutineShareLink(routine, exercises) {
+  return buildShareLink("routine", buildRoutineShare(routine, exercises));
+}
+
+// Parses+validates a share payload (raw JSON/CSV text, a barrow://routine
+// deep link, or an already-parsed object — it comes from a scanned QR
+// string, a read file, or the deep-link handler). Throws a message fit to
+// show the user directly — used to reject malformed files or QR codes that
+// aren't a Barrow routine at all.
 export function parseRoutineShare(raw) {
+  const text = typeof raw === "string" ? raw.trim() : null;
+  if (text && text.startsWith(CSV_HEADER.join(","))) {
+    return parseRoutineShareCSV(text);
+  }
+
   let data;
   try {
-    data = typeof raw === "string" ? JSON.parse(raw) : raw;
+    data = typeof raw === "string" ? JSON.parse(unwrapShareLink(raw)) : raw;
   } catch {
     throw new Error("That doesn't look like a Barrow routine file.");
   }
@@ -42,6 +57,101 @@ export function parseRoutineShare(raw) {
     throw new Error("That doesn't look like a Barrow routine file.");
   }
   return data;
+}
+
+// CSV form of the same share payload — one row per exercise, opened
+// natively by spreadsheet apps and pasteable as plain text, unlike the JSON
+// form. Superset membership is carried as a shared group number per row
+// instead of the JSON form's index arrays. The QR code still uses the more
+// compact JSON form (buildRoutineShareLink) since repeating the routine name
+// on every row would blow past the QR size limit sooner.
+const CSV_HEADER = ["name", "exercise", "category", "superset", "custom", "muscle", "fields", "setFormat"];
+
+function csvEscape(value) {
+  const s = value == null ? "" : String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function csvSplitLine(line) {
+  const fields = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      fields.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  fields.push(cur);
+  return fields;
+}
+
+export function buildRoutineShareCSV(routine, exercises) {
+  const share = buildRoutineShare(routine, exercises);
+  const groupOf = new Map();
+  share.g.forEach((group, gi) => group.forEach((idx) => groupOf.set(idx, gi + 1)));
+
+  const rows = share.e.map((ex, i) => [
+    share.n,
+    ex.n,
+    ex.c || "",
+    groupOf.has(i) ? String(groupOf.get(i)) : "",
+    ex.custom ? "true" : "",
+    ex.custom && ex.m ? ex.m : "",
+    ex.custom && ex.f ? ex.f.join("|") : "",
+    ex.custom && ex.s ? ex.s : "",
+  ]);
+
+  return [CSV_HEADER, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n") + "\n";
+}
+
+function parseRoutineShareCSV(text) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.replace(/\r$/, ""))
+    .filter((l) => l.length > 0);
+  const dataLines = lines.slice(1);
+  if (dataLines.length === 0) {
+    throw new Error("That doesn't look like a Barrow routine file.");
+  }
+
+  const groups = new Map();
+  const e = dataLines.map((line, i) => {
+    const [, exercise, category, superset, custom, muscle, fields, setFormat] = csvSplitLine(line);
+    if (superset) {
+      if (!groups.has(superset)) groups.set(superset, []);
+      groups.get(superset).push(i);
+    }
+    return {
+      n: exercise,
+      c: category || undefined,
+      ...(custom === "true"
+        ? { custom: true, m: muscle || undefined, f: fields ? fields.split("|") : undefined, s: setFormat || undefined }
+        : {}),
+    };
+  });
+
+  const n = csvSplitLine(dataLines[0])[0];
+  if (!n || !e.length || e.some((entry) => !entry.n)) {
+    throw new Error("That doesn't look like a Barrow routine file.");
+  }
+  const g = Array.from(groups.values()).filter((grp) => grp.length >= 2);
+
+  return { t: ROUTINE_SHARE_TYPE, v: ROUTINE_SHARE_VERSION, n, e, g };
 }
 
 // Resolves a parsed share payload against this device's exercise list.

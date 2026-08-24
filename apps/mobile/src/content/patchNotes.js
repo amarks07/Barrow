@@ -15,6 +15,48 @@ import appJson from "../../app.json";
 // be the longest list; other categories are just flat string arrays.
 export const PATCH_NOTES = [
   {
+    version: "1.3.1",
+    date: "2026-08-23",
+    title: "Rep ranges, deep-link sharing, and sync fixes",
+    notes: {
+      features: [
+        {
+          section: "Routines",
+          items: [
+            "Add an optional rep range (min-max) to any exercise in a routine — it shows as a pill you can edit or clear, and takes priority when Barrow recommends reps during a workout.",
+          ],
+        },
+        {
+          section: "Sharing",
+          items: [
+            "Friend and routine QR codes can now be opened straight from your phone's camera app, not just Barrow's in-app scanner.",
+            "Shared routine files now export as CSV, so they open in spreadsheet apps and paste as text; importing still accepts CSV or the older format.",
+          ],
+        },
+        {
+          section: "Sync",
+          items: [
+            "Added a \"Last synced\" footer showing when your data last backed up to the cloud.",
+            "Signing into an account that already has data on this device now offers a Merge option, combining the two instead of forcing a replace-or-cancel choice.",
+          ],
+        },
+      ],
+      styling: [
+        "Exercise search on the Exercises tab and exercise picker now has a clear button.",
+        "Tapping a workout in History now opens straight into that day's exercise view.",
+        "The Barrow wordmark in the header now stays centered regardless of the countdown timer button.",
+      ],
+      fixes: [
+        "Signing out now fully clears local data for that account instead of leaving it cached on the device.",
+        "Profile fields (name, birthday, gender, height, weight) synced from the cloud no longer get overwritten by stale local values.",
+        "Fixed Profile ID showing a fake placeholder before your first sync — it now shows \"Unavailable\" until it's real.",
+        "Fixed biometric unlock occasionally getting stuck locked on app start.",
+        "Fixed swiping across the +/- counter buttons sometimes not handing off to the day-swipe gesture on Android.",
+        "Android download instructions now include guidance for Samsung's Auto Blocker.",
+      ],
+    },
+  },
+  {
     version: "1.3.0",
     date: "2026-08-12",
     title: "Friends, multi-account devices, and a countdown timer",

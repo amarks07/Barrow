@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft } from "lucide-react-native";
+import { ArrowLeft, ChevronRight } from "lucide-react-native";
 import { exerciseMeta, fmtNum, formatSetLine, getCardioDistanceSeries, getVolumeSeries, getWeightPR, shortDayLabel } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { StatTile } from "../ui/StatTile";
@@ -9,7 +9,7 @@ import { VolumeChart } from "./VolumeChart";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
-export function HistoryView({ exercise, workouts, unit, onBack }) {
+export function HistoryView({ exercise, workouts, unit, onBack, onOpenFocus }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const isSingle = exercise.setFormat === "single";
@@ -99,56 +99,64 @@ export function HistoryView({ exercise, workouts, unit, onBack }) {
             </Text>
             <View style={{ gap: 12 }}>
               {groups.map((g, gi) => (
-                <View
+                <Pressable
                   key={g.workoutId}
-                  style={groups.length > 1 ? { paddingLeft: 8, borderLeftWidth: 1.5, borderLeftColor: tokens.lineStrong } : undefined}
+                  onPress={onOpenFocus ? () => onOpenFocus(dateKey, g.workoutId) : undefined}
+                  className="flex-row items-start"
+                  style={[
+                    { gap: 6 },
+                    groups.length > 1 ? { paddingLeft: 8, borderLeftWidth: 1.5, borderLeftColor: tokens.lineStrong } : undefined,
+                  ]}
                 >
-                  {groups.length > 1 && (
-                    <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 10, textTransform: "uppercase", color: tokens.textDim }} className="mb-1">
-                      {g.name}
-                    </Text>
-                  )}
-                  {g.sets.map((s, i) =>
-                    isSingle ? (
-                      <View key={s.id} className="py-0.5">
-                        <Text style={{ fontSize: 13, color: tokens.text, fontVariant: ["tabular-nums"] }}>
-                          {formatSetLine(s, exercise, unit)}
-                        </Text>
-                      </View>
-                    ) : (
-                      <View key={s.id} className="flex-row items-center justify-between py-0.5">
-                        <View className="flex-row items-center gap-1.5">
-                          <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 14, textTransform: "uppercase", color: tokens.textDim }}>
-                            Set {i + 1}
+                  <View className="flex-1">
+                    {groups.length > 1 && (
+                      <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 10, textTransform: "uppercase", color: tokens.textDim }} className="mb-1">
+                        {g.name}
+                      </Text>
+                    )}
+                    {g.sets.map((s, i) =>
+                      isSingle ? (
+                        <View key={s.id} className="py-0.5">
+                          <Text style={{ fontSize: 13, color: tokens.text, fontVariant: ["tabular-nums"] }}>
+                            {formatSetLine(s, exercise, unit)}
                           </Text>
-                          {s.warmup && (
-                            <View
-                              className="rounded-full px-1.5 py-0.5"
-                              style={{ backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.lineStrong }}
-                            >
-                              <Text
-                                style={{
-                                  fontFamily: FONT_DISPLAY,
-                                  fontSize: 9,
-                                  lineHeight: 9,
-                                  textTransform: "uppercase",
-                                  includeFontPadding: false,
-                                  textAlignVertical: "center",
-                                  color: tokens.textDim,
-                                }}
-                              >
-                                Warmup
-                              </Text>
-                            </View>
-                          )}
                         </View>
-                        <Text style={{ fontSize: 13, color: tokens.text, fontVariant: ["tabular-nums"] }}>
-                          {formatSetLine(s, exercise, unit)}
-                        </Text>
-                      </View>
-                    )
-                  )}
-                </View>
+                      ) : (
+                        <View key={s.id} className="flex-row items-center justify-between py-0.5">
+                          <View className="flex-row items-center gap-1.5">
+                            <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 14, textTransform: "uppercase", color: tokens.textDim }}>
+                              Set {i + 1}
+                            </Text>
+                            {s.warmup && (
+                              <View
+                                className="rounded-full px-1.5 py-0.5"
+                                style={{ backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.lineStrong }}
+                              >
+                                <Text
+                                  style={{
+                                    fontFamily: FONT_DISPLAY,
+                                    fontSize: 9,
+                                    lineHeight: 9,
+                                    textTransform: "uppercase",
+                                    includeFontPadding: false,
+                                    textAlignVertical: "center",
+                                    color: tokens.textDim,
+                                  }}
+                                >
+                                  Warmup
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={{ fontSize: 13, color: tokens.text, fontVariant: ["tabular-nums"] }}>
+                            {formatSetLine(s, exercise, unit)}
+                          </Text>
+                        </View>
+                      )
+                    )}
+                  </View>
+                  {onOpenFocus && <ChevronRight size={15} color={tokens.textDim} style={{ marginTop: 2 }} />}
+                </Pressable>
               ))}
             </View>
           </View>

@@ -3,8 +3,8 @@ import { groupContiguous, pruneGroups } from "../supersets";
 // CRUD for reusable exercise-list routines, plus turning an already-logged
 // day into a new routine.
 export function useRoutineActions({ setRoutines, setWorkouts, setSelectedRoutineId, workouts }) {
-  const createRoutine = (name, exerciseIds, supersets = []) => {
-    setRoutines((prev) => [...prev, { id: `rtn-${Date.now()}`, name, exerciseIds, supersets }]);
+  const createRoutine = (name, exerciseIds, supersets = [], repRanges = {}) => {
+    setRoutines((prev) => [...prev, { id: `rtn-${Date.now()}`, name, exerciseIds, supersets, repRanges }]);
   };
 
   // Turns an already-logged workout's exercises into a reusable routine —
@@ -69,7 +69,24 @@ export function useRoutineActions({ setRoutines, setWorkouts, setSelectedRoutine
       prev.map((r) => {
         if (r.id !== routineId) return r;
         const exerciseIds = r.exerciseIds.filter((id) => id !== exId);
-        return { ...r, exerciseIds, supersets: pruneGroups(r.supersets || [], exerciseIds) };
+        const { [exId]: _removed, ...repRanges } = r.repRanges || {};
+        return { ...r, exerciseIds, supersets: pruneGroups(r.supersets || [], exerciseIds), repRanges };
+      })
+    );
+
+  // Sets (or, passing null for both, clears) the target rep range shown
+  // under one exercise in a routine — feeds getRecommendation/getRepRange
+  // when a workout built from this routine is being logged, taking priority
+  // over the history-derived range.
+  const setRoutineRepRange = (routineId, exId, min, max) =>
+    setRoutines((prev) =>
+      prev.map((r) => {
+        if (r.id !== routineId) return r;
+        if (min == null && max == null) {
+          const { [exId]: _removed, ...repRanges } = r.repRanges || {};
+          return { ...r, repRanges };
+        }
+        return { ...r, repRanges: { ...(r.repRanges || {}), [exId]: { min, max } } };
       })
     );
 
@@ -127,5 +144,6 @@ export function useRoutineActions({ setRoutines, setWorkouts, setSelectedRoutine
     reorderRoutineExercise,
     createRoutineSuperset,
     ungroupRoutineSuperset,
+    setRoutineRepRange,
   };
 }

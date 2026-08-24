@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { XCircle } from "lucide-react-native";
 import { CATEGORIES } from "@barrow/core";
 import { ColorSwitch } from "../ui/ColorSwitch";
 import { CategoryFilterChips } from "../ui/CategoryFilterChips";
@@ -36,15 +37,20 @@ export function ExercisesView({ exercises, exerciseView, setExerciseView, onOpen
           ]}
         />
       </View>
-      <View className="px-5 pb-3">
+      <View className="px-5 pb-3 flex-row items-center" style={{ gap: 6 }}>
         <TextInput
           value={query}
           onChangeText={setQuery}
           placeholder="Search"
           placeholderTextColor={tokens.textDim}
           className="py-1.5"
-          style={{ fontSize: 16, color: tokens.text, borderBottomWidth: 1, borderBottomColor: tokens.lineStrong }}
+          style={{ flex: 1, fontSize: 16, color: tokens.text, borderBottomWidth: 1, borderBottomColor: tokens.lineStrong }}
         />
+        {query.length > 0 && (
+          <Pressable onPress={() => setQuery("")} accessibilityLabel="Clear search" hitSlop={8}>
+            <XCircle size={18} color={tokens.textDim} />
+          </Pressable>
+        )}
       </View>
       <CategoryFilterChips value={categoryFilter} onChange={setCategoryFilter} />
       <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 88 }}>

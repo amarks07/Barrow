@@ -11,7 +11,7 @@ import {
   generateId,
 } from "@barrow/core";
 import { asyncStorageAdapter } from "./storage";
-import { getActiveAccountId, setActiveAccountId, namespacedKey } from "./accountNamespace";
+import { getActiveAccountId, setActiveAccountId, namespacedKey, clearAccountData } from "./accountNamespace";
 import { DEFAULT_ACCENT } from "../theme/accentPalette";
 import { useCloudSync } from "../hooks/useCloudSync";
 import { refreshFocusWidget } from "../widget/refreshFocusWidget";
@@ -39,7 +39,12 @@ const DEFAULT_PROFILE = {
   height: "",
   weight: "",
   premium: false,
-  profileId: `usr-${Math.random().toString(36).slice(2, 10)}`,
+  // Real value ("b-482913"-style, see generate_public_id in
+  // supabase/schema.sql) only ever comes from the server, once signed in —
+  // left blank rather than a locally-generated placeholder (which used to
+  // leak into the UI as a fake id whenever the cloud pull hadn't landed
+  // yet). ProfileView/FriendsView show "Unavailable" while this is blank.
+  profileId: "",
 };
 
 // Owns every persisted slice of app state (AsyncStorage-backed, via
@@ -150,6 +155,16 @@ export function AppStateProvider({ children }) {
     null,
     JSON_CODEC
   );
+  // Timestamp (ms) of the last successful cloud push/pull, for
+  // LastSyncedFooter's persistent "last synced" readout — stamped by
+  // useCloudSync itself (see its setLastSyncedAt param) rather than derived
+  // from `cloudSync.status`, since "synced" is a transient status that
+  // reverts to "idle"/other values well before the next sync.
+  const [lastSyncedAt, setLastSyncedAt, lastSyncedAtHydrated] = usePersistedState(
+    k("barrow:lastSyncedAt"),
+    null,
+    JSON_CODEC
+  );
 
   // AND of every slice above — true once a namespace switch (or the
   // initial mount) has fully settled, so useCloudSync knows it's safe to
@@ -173,7 +188,8 @@ export function AppStateProvider({ children }) {
     workoutTimerStartedAtHydrated &&
     countdownDurationMsHydrated &&
     countdownEndAtHydrated &&
-    countdownPausedMsHydrated;
+    countdownPausedMsHydrated &&
+    lastSyncedAtHydrated;
 
   // Switches which account's local cache is active: persists the pointer,
   // then flips React state so every usePersistedState key above recomputes
@@ -295,6 +311,7 @@ export function AppStateProvider({ children }) {
     workouts, setWorkouts,
     unit, setUnit,
     activeAccountId, switchActiveAccount, localDataHydrated,
+    setLastSyncedAt,
   });
 
   // Wipes every logged workout, routine, and custom exercise/stretch
@@ -315,6 +332,43 @@ export function AppStateProvider({ children }) {
     setRoutines([]);
     setExercises(SEED_EXERCISES);
     setWorkoutTimerStartedAt(null);
+  };
+
+  // Full local wipe of everything this device has cached for the account
+  // that's signing out: every persisted slice (workouts/routines/exercises/
+  // profile, and every preference) back to its default, PLUS a direct
+  // AsyncStorage removeItem for those same keys (clearAccountData). The
+  // direct removeItem matters, not just the setState calls above: usePersistedState
+  // only flushes a change to disk after its own 400ms save debounce, and the
+  // foreground-resync effect above re-reads barrow:workouts straight from
+  // disk on every AppState "active" transition — without the direct wipe, a
+  // backgrounding within that 400ms window (very plausible right after a
+  // confirm-modal tap) could read the still-stale on-disk value back into
+  // memory and undo the clear the user just confirmed. Signing back into the
+  // same account later restores whatever the cloud still has for it
+  // (workouts/routines/exercises/profile, if premium and backed up) via the
+  // normal pull-on-sign-in flow — this only ever touches the local cache.
+  const clearAllAccountData = async () => {
+    setExercises(SEED_EXERCISES);
+    setRoutines([]);
+    setWorkouts({});
+    setUnit("lb");
+    setTheme("system");
+    setAccentColor(DEFAULT_ACCENT);
+    setWorkoutView("focus");
+    setFocusSupersetGrouping("together");
+    setProfile(DEFAULT_PROFILE);
+    setFocusNotificationEnabled("off");
+    setPlateCalculatorEnabled(false);
+    setStretchRoutinesEnabled(false);
+    setWorkoutTimerEnabled(false);
+    setWorkoutTimerAutoOpenSummary(true);
+    setWorkoutTimerStartedAt(null);
+    setCountdownDurationMs(5 * 60 * 1000);
+    setCountdownEndAt(null);
+    setCountdownPausedMs(null);
+    setLastSyncedAt(null);
+    await clearAccountData(activeAccountId);
   };
 
   const value = useMemo(
@@ -353,6 +407,7 @@ export function AppStateProvider({ children }) {
       setCountdownEndAt,
       countdownPausedMs,
       setCountdownPausedMs,
+      lastSyncedAt,
       profile,
       updateProfile,
       profileHydrated,
@@ -362,6 +417,7 @@ export function AppStateProvider({ children }) {
       exerciseActions,
       getOrCreateWorkoutForDate,
       clearWorkoutData,
+      clearAllAccountData,
       cloudSync,
       // Which account's local cache is active (null = guest bucket) — read
       // by WorkoutTimerBadge/staleFocusPointer call sites that touch
@@ -370,7 +426,7 @@ export function AppStateProvider({ children }) {
       activeAccountId,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [exercises, routines, workouts, unit, theme, accentColor, workoutView, focusSupersetGrouping, focusNotificationEnabled, plateCalculatorEnabled, stretchRoutinesEnabled, workoutTimerEnabled, workoutTimerAutoOpenSummary, workoutTimerStartedAt, countdownDurationMs, countdownEndAt, countdownPausedMs, profile, profileHydrated, cloudSync, activeAccountId]
+    [exercises, routines, workouts, unit, theme, accentColor, workoutView, focusSupersetGrouping, focusNotificationEnabled, plateCalculatorEnabled, stretchRoutinesEnabled, workoutTimerEnabled, workoutTimerAutoOpenSummary, workoutTimerStartedAt, countdownDurationMs, countdownEndAt, countdownPausedMs, lastSyncedAt, profile, profileHydrated, cloudSync, activeAccountId]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
