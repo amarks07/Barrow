@@ -1,0 +1,1 @@
+node scripts/sync-version-from-patch-notes.js
