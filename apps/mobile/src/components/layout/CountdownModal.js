@@ -32,10 +32,12 @@ export function formatCountdown(ms) {
 // "Reset" (restart from the same duration), and "Stop" (clear the timer) —
 // no re-entry of the duration, matching CountdownButton's "tap again to
 // pause, reset, or stop" contract. Reset/Stop close the sheet afterward
-// (same as Start does) since there's nothing left to look at here once the
-// timer's been reset back to running or cleared entirely; Pause/Resume
-// leave it open since the whole point is watching the frozen/live time and
-// toggling it right back, possibly more than once.
+// since there's nothing left to look at here once the timer's been reset
+// back to running or cleared entirely; Start/Pause/Resume leave it open —
+// Start so you can watch it actually begin counting down instead of the
+// sheet vanishing the instant you tap it, Pause/Resume since the whole
+// point is watching the frozen/live time and toggling it right back,
+// possibly more than once.
 export function CountdownModal({
   visible,
   onClose,

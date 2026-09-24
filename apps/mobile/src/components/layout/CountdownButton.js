@@ -110,7 +110,6 @@ export function CountdownButton() {
           setCountdownDurationMs(durationMs);
           setCountdownEndAt(Date.now() + durationMs);
           setCountdownPausedMs(null);
-          setOpen(false);
         }}
         onPause={() => {
           setCountdownPausedMs(countdownEndAt - Date.now());
