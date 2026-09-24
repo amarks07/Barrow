@@ -6,7 +6,6 @@ import { WorkoutSummaryView } from "../../components/workout/WorkoutSummaryView"
 import { asyncStorageAdapter } from "../../state/storage";
 import { namespacedKey } from "../../state/accountNamespace";
 import { refreshFocusWidget } from "../../widget/refreshFocusWidget";
-import { refreshFocusNotification } from "../../notification/focusNotification";
 
 const FOCUS_POINTER_KEY = "barrow:focusPointer";
 
@@ -19,7 +18,7 @@ export function DayScreen({ route, navigation }) {
   const { dateKey, workoutId: initialWorkoutId } = route.params;
   const {
     exercises, routines, unit, workouts, setWorkouts,
-    nextId, dayWorkoutsActions, routineActions, exerciseActions, workoutView, focusNotificationEnabled,
+    nextId, dayWorkoutsActions, routineActions, exerciseActions, workoutView,
     plateCalculatorEnabled,
     getOrCreateWorkoutForDate, activeAccountId,
   } = useAppState();
@@ -49,8 +48,6 @@ export function DayScreen({ route, navigation }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateKey, dayWorkouts.length]);
 
-  const focusNotificationEnabledRef = useRef(focusNotificationEnabled);
-  focusNotificationEnabledRef.current = focusNotificationEnabled;
   const activeAccountIdRef = useRef(activeAccountId);
   activeAccountIdRef.current = activeAccountId;
   const trackedWorkoutRef = useRef({ dateKey, workoutId: workout?.id });
@@ -87,9 +84,6 @@ export function DayScreen({ route, navigation }) {
         const pointer = { dateKey, workoutId: workout.id, exerciseId: entries[0].exerciseId, updatedAt: Date.now() };
         return asyncStorageAdapter.setItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current), JSON.stringify(pointer)).then(() => {
           refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
-          if (focusNotificationEnabledRef.current === "on") {
-            refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
-          }
         });
       })
       .catch((e) => console.error("Barrow: failed to save barrow:focusPointer", e));
@@ -109,9 +103,6 @@ export function DayScreen({ route, navigation }) {
           if (!existing || existing.dateKey !== trackedDateKey || existing.workoutId !== trackedWorkoutId) return;
           return asyncStorageAdapter.removeItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current)).then(() => {
             refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
-            if (focusNotificationEnabledRef.current === "on") {
-              refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
-            }
           });
         })
         .catch((e) => console.error("Barrow: failed to clear barrow:focusPointer", e));

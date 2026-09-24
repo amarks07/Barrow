@@ -4,10 +4,18 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PagerView from "react-native-pager-view";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react-native";
-import { buildSteps, convertWeight, fmtNum, getRecommendation, getRepRange } from "@barrow/core";
+import {
+  buildSteps,
+  convertWeight,
+  fmtNum,
+  getPreviousSessionSets,
+  getPreviousWarmupSets,
+  getRecommendation,
+  getRepRange,
+} from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
-import { NoteField } from "../ui/NoteField";
+import { ExerciseNotesModal } from "../ui/ExerciseNotesModal";
 import { SetCounters } from "./SetCounters";
 import { SingleCounters } from "./SingleCounters";
 import { StretchPanel } from "../stretch/StretchPanel";
@@ -22,23 +30,39 @@ import { BUTTON_HEIGHT } from "../../theme/dimensions";
 // it instead of overlapping, without restructuring that bar itself.
 const NAV_BAR_HEIGHT = 16 + BUTTON_HEIGHT.medium;
 
-function ExercisePanel({ entry, ex, unit, workouts, workoutId, routineRepRange, plateCalculatorEnabled, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, onOpenHistory, showName, focusSetId, focusField }) {
+function ExercisePanel({ entry, ex, unit, workouts, workoutId, routineRepRange, plateCalculatorEnabled, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, onOpenHistory, showName, focusSetId, focusField, dateKey, exerciseNotes, onChangeExerciseNote }) {
   const { tokens } = useTheme();
+  const [noteOpen, setNoteOpen] = useState(false);
   const isStretch = ex.type === "stretch";
   const isSingle = ex.setFormat === "single";
   const lastSet = entry.sets[entry.sets.length - 1];
   const routineRange = routineRepRange(entry.exerciseId);
+  // getRepRange's history-derived range (and its made-up 8-12 fallback when
+  // there's no history either) both feed getRecommendation a sane rep
+  // ceiling/floor for the progression math below, but only a routine-defined
+  // range is an actual target worth showing the user as one.
   const { repLow, repHigh } = routineRange
     ? { repLow: routineRange.min, repHigh: routineRange.max }
     : getRepRange(entry.exerciseId, workouts, workoutId);
-  const rec = !isSingle && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workoutId, repLow, repHigh) : null;
+  const hasTarget = !!routineRange;
+  // Suggested next weight/reps is progression math against a target range,
+  // so it's gated on the same routine-defined range as the Target line
+  // above rather than showing for every exercise with logged history.
+  const rec = !isSingle && entry.sets.length === 0 && hasTarget ? getRecommendation(entry.exerciseId, workouts, unit, workoutId, repLow, repHigh) : null;
   // First set of an entry is left blank rather than auto-filled from `rec`
-  // — see DayView's WorkoutEntryRow for the matching comment. `rec` still
-  // computed above for the "Last: ..." reference line.
+  // — see DayView's WorkoutEntryRow for the matching comment.
   const prefill = lastSet
     ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
     : null;
   const singleSet = isSingle ? entry.sets[0] : null;
+  // Previous-session reference lines and the "copy warmups" preset list are
+  // only meaningful for the sets-array branch (plain exercises, not single-
+  // counter or stretch exercises) — computed here rather than inline in the
+  // JSX so the spacing logic below can see all three lines' presence at once.
+  const prevSession = !isSingle && !isStretch ? getPreviousSessionSets(entry.exerciseId, workouts, unit, workoutId) : null;
+  const prevWarmups = !isSingle && !isStretch ? getPreviousWarmupSets(entry.exerciseId, workouts, unit, workoutId) : [];
+  const hasSuggestion = entry.sets.length === 0 && !!rec;
+  const copyWarmups = () => prevWarmups.forEach((preset) => onAddSet(entry.exerciseId, preset));
 
   return (
     <View className="py-4" style={{ borderBottomWidth: 1.5, borderBottomColor: tokens.line }}>
@@ -56,14 +80,21 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, routineRepRange, 
               button and title that already identify it. */}
           <View className="flex-row items-center gap-2">
             <Button label="History" size="small" onPress={() => onOpenHistory(entry.exerciseId)} />
-            <NoteField
-              value={entry.note}
-              onChange={(note) => onSetEntryNote(entry.exerciseId, note)}
-              placeholder="Add exercise note"
-              title={`${ex.name} note`}
-            />
+            <Button label="Notes" size="small" onPress={() => setNoteOpen(true)} />
           </View>
         </View>
+      )}
+
+      {noteOpen && (
+        <ExerciseNotesModal
+          exerciseName={ex.name}
+          dateKey={dateKey}
+          exerciseNote={exerciseNotes[entry.exerciseId]}
+          onChangeExerciseNote={(note) => onChangeExerciseNote(entry.exerciseId, note)}
+          dayNote={entry.note}
+          onChangeDayNote={(note) => onSetEntryNote(entry.exerciseId, note)}
+          onClose={() => setNoteOpen(false)}
+        />
       )}
 
       {ex.angles && (
@@ -90,15 +121,44 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, routineRepRange, 
         />
       ) : (
         <>
-          {entry.sets.length === 0 && rec && (
-            <Text style={{ fontSize: 11, color: tokens.textDim }} className="mb-3">
-              Last: {fmtNum(rec.lastWeight)} {unit} × {fmtNum(rec.lastReps)} · {rec.note}
-            </Text>
+          {(hasTarget || hasSuggestion || prevSession) && (
+            <View className="flex-row items-start justify-between mb-3" style={{ gap: 12 }}>
+              <View>
+                {hasTarget && (
+                  <Text style={{ fontSize: 11, color: tokens.textDim }}>
+                    Target: {repLow}–{repHigh} reps
+                  </Text>
+                )}
+                {hasSuggestion && (
+                  <Text style={{ fontSize: 11, color: tokens.textDim }}>
+                    Suggested: {fmtNum(rec.recWeight)} {unit} × {fmtNum(rec.recReps)} · {rec.note}
+                  </Text>
+                )}
+              </View>
+
+              {prevSession && (
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={{ fontSize: 11, color: tokens.textDim, textAlign: "right" }}>
+                    Previous 1st set: {fmtNum(prevSession.first.weight)} {unit} × {fmtNum(prevSession.first.reps)}
+                  </Text>
+                  {prevSession.max && (
+                    <Text style={{ fontSize: 11, color: tokens.textDim, textAlign: "right" }}>
+                      Previous max set: {fmtNum(prevSession.max.weight)} {unit} × {fmtNum(prevSession.max.reps)}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
+
+          {entry.sets.length === 0 && prevWarmups.length > 0 && (
+            <Button label="Copy warmups" size="small" onPress={copyWarmups} style={{ marginBottom: 12 }} />
           )}
 
           {entry.sets.map((set) => (
             <SetCounters
               key={set.id}
+              fields={ex.fields}
               sets={entry.sets}
               set={set}
               unit={unit}
@@ -142,10 +202,12 @@ export function ExerciseFocusView({
   groupSupersets = true,
   onStepChange,
   focusSetId, focusField,
+  exerciseNotes, onChangeExerciseNote,
 }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const pagerRef = useRef(null);
+  const [notesOpen, setNotesOpen] = useState(false);
   const workout = dayWorkouts.find((w) => w.id === activeWorkoutId) || dayWorkouts[0];
   const entries = workout ? workout.entries : [];
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
@@ -234,15 +296,22 @@ export function ExerciseFocusView({
         {primaryEntry && primaryEx && (
           <View className="flex-row items-center gap-2">
             <Button label="History" size="small" onPress={() => onOpenHistory(primaryEntry.exerciseId)} />
-            <NoteField
-              value={primaryEntry.note}
-              onChange={(note) => onSetEntryNote(primaryEntry.exerciseId, note)}
-              placeholder="Add exercise note"
-              title={`${primaryEx.name} note`}
-            />
+            <Button label="Notes" size="small" onPress={() => setNotesOpen(true)} />
           </View>
         )}
       </View>
+
+      {primaryEntry && primaryEx && notesOpen && (
+        <ExerciseNotesModal
+          exerciseName={primaryEx.name}
+          dateKey={dateKey}
+          exerciseNote={exerciseNotes[primaryEntry.exerciseId]}
+          onChangeExerciseNote={(note) => onChangeExerciseNote(primaryEntry.exerciseId, note)}
+          dayNote={primaryEntry.note}
+          onChangeDayNote={(note) => onSetEntryNote(primaryEntry.exerciseId, note)}
+          onClose={() => setNotesOpen(false)}
+        />
+      )}
 
       <PagerView ref={pagerRef} style={{ flex: 1 }} initialPage={clampedIndex} onPageSelected={(e) => setActiveIndex(e.nativeEvent.position)}>
         {steps.map((step, stepIndex) => (
@@ -274,6 +343,9 @@ export function ExerciseFocusView({
                   showName={step.length > 1}
                   focusSetId={focusSetId}
                   focusField={focusField}
+                  dateKey={dateKey}
+                  exerciseNotes={exerciseNotes}
+                  onChangeExerciseNote={onChangeExerciseNote}
                 />
               );
             })}

@@ -15,6 +15,51 @@ import appJson from "../../app.json";
 // be the longest list; other categories are just flat string arrays.
 export const PATCH_NOTES = [
   {
+    version: "1.4.0",
+    date: "2026-09-23",
+    title: "Push notifications, a smarter widget, and split-side sets",
+    notes: {
+      features: [
+        {
+          section: "Notifications",
+          items: [
+            "Friend requests and accepts now send a real push notification, even when Barrow is closed.",
+            "Added a Notifications screen in Profile, with an unread badge, showing friend activity and reminders to fill in missing profile info.",
+            "Barrow can now show occasional announcements from the team when you open the app.",
+            "Added a heads-up when a newer version of Barrow is available to download.",
+          ],
+        },
+        {
+          section: "Home screen widget",
+          items: [
+            "The widget now shows a full week at a glance — tap any day to browse its workout, then drill into a set-by-set focus view, instead of only showing the currently active day.",
+          ],
+        },
+        {
+          section: "Sets",
+          items: [
+            "Sets can now track reps separately per side (e.g. left/right dumbbell curls) instead of just tagging which arm you used.",
+            "Added an \"Edit fields\" option on the History screen to change which metrics (weight, reps, time, etc.) an exercise tracks, with the option to carry existing history onto the new fields.",
+          ],
+        },
+        {
+          section: "History",
+          items: [
+            "The history chart can now show Max Weight, Estimated 1RM, Best Set Volume, Total Reps, or Total Sets, in addition to Volume.",
+            "Exercises with angle variants (like incline/decline) can now be filtered in History.",
+            "Any logged day can be excluded from the progress graph — useful for one-off or outlier sessions.",
+          ],
+        },
+      ],
+      styling: [
+        "Workout suggestions now show your previous first set and previous max set separately, instead of a single \"Last\" value.",
+        "Added a \"Copy warmups\" button to reuse a set's previous warmup sets.",
+        "The delete-workout button is now always available, not just when a day has more than one workout.",
+        "The exercise note button now opens a combined exercise + day notes editor.",
+      ],
+    },
+  },
+  {
     version: "1.3.1",
     date: "2026-08-23",
     title: "Rep ranges, deep-link sharing, and sync fixes",

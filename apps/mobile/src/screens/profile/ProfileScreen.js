@@ -4,8 +4,8 @@ import { useAppState } from "../../state/AppStateProvider";
 // Reachable whether or not the user is signed in — ProfileView (via
 // CloudBackupSection) shows a "Sign in/up" CTA in place of sync status when
 // there's no session, rather than this screen bouncing back to Tabs.
-export function ProfileScreen({ navigation }) {
-  const { profile, updateProfile, cloudSync, clearWorkoutData, clearAllAccountData } = useAppState();
+export function ProfileScreen({ navigation, route }) {
+  const { profile, updateProfile, cloudSync, notifications, appVersionCheck, clearWorkoutData, clearAllAccountData } = useAppState();
 
   return (
     <ProfileView
@@ -13,6 +13,9 @@ export function ProfileScreen({ navigation }) {
       onUpdate={updateProfile}
       onClose={() => navigation.goBack()}
       cloudSync={cloudSync}
+      notifications={notifications}
+      appVersionCheck={appVersionCheck}
+      initialPage={route.params?.initialPage}
       onClearWorkoutData={clearWorkoutData}
       onSignOutClear={clearAllAccountData}
     />

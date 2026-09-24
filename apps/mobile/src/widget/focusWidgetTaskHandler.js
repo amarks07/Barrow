@@ -1,5 +1,5 @@
 import {
-  readFocusSnapshot,
+  resolveWidgetState,
   focusAdjustReps,
   focusAdjustWeight,
   focusAddSet,
@@ -7,10 +7,19 @@ import {
   focusNavigateStep,
   focusToggleWarmup,
   focusScrollSets,
+  widgetShiftWeek,
+  widgetSelectDay,
+  widgetBackToWeek,
+  widgetShiftDay,
+  widgetOpenWorkout,
+  widgetStartWorkout,
+  widgetEndWorkout,
+  widgetResumeWorkout,
+  widgetBackFromFocus,
 } from "@barrow/core";
 import { asyncStorageAdapter } from "../state/storage";
 import { getActiveAccountId, withAccountNamespace } from "../state/accountNamespace";
-import { readExercises, readUnit, readTheme, readAccentColor } from "../state/focusReaders";
+import { readExercises, readUnit, readTheme, readAccentColor, readWorkoutTimerEnabled } from "../state/focusReaders";
 import { FocusWidget } from "./FocusWidget";
 
 // This handler runs headless — via Android's HeadlessJsTaskService, with no
@@ -32,6 +41,24 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Set-editing actions only ever fire while the widget is showing the focus
+// (step editor) screen — every other action (week/day nav, start/end
+// workout) is handled by the widget* functions in focusStorage.js, each of
+// which already returns the next resolveWidgetState() result itself.
+const SET_EDIT_ACTIONS = new Set([
+  "REPS_PLUS",
+  "REPS_MINUS",
+  "WEIGHT_PLUS",
+  "WEIGHT_MINUS",
+  "ADD_SET",
+  "REMOVE_SET",
+  "TOGGLE_WARMUP",
+  "PREV_STEP",
+  "NEXT_STEP",
+  "SCROLL_UP",
+  "SCROLL_DOWN",
+]);
+
 export async function focusWidgetTaskHandler(props) {
   const { widgetAction, clickAction, clickActionData, renderWidget } = props;
   // Resolved once per invocation (not per key) — this runs headless, with
@@ -40,68 +67,114 @@ export async function focusWidgetTaskHandler(props) {
   // namespaced adapter instead of the raw one.
   const storage = withAccountNamespace(asyncStorageAdapter, await getActiveAccountId());
 
+  const readCommon = () =>
+    Promise.all([readExercises(storage), readUnit(storage), readTheme(storage), readAccentColor(storage), readWorkoutTimerEnabled(storage)]);
+
+  const render = (state, common, refreshing) => {
+    const [, unit, theme, accentColor, workoutTimerEnabled] = common;
+    renderWidget(
+      <FocusWidget state={state} unit={unit} theme={theme} accentColor={accentColor} workoutTimerEnabled={workoutTimerEnabled} refreshing={refreshing} />
+    );
+  };
+
   if (widgetAction === "WIDGET_ADDED" || widgetAction === "WIDGET_UPDATE" || widgetAction === "WIDGET_RESIZED") {
-    const [exercises, unit, theme, accentColor] = await Promise.all([
-      readExercises(storage),
-      readUnit(storage),
-      readTheme(storage),
-      readAccentColor(storage),
-    ]);
-    const snapshot = await readFocusSnapshot(storage, exercises);
-    renderWidget(<FocusWidget snapshot={snapshot} unit={unit} theme={theme} accentColor={accentColor} />);
+    const common = await readCommon();
+    const state = await resolveWidgetState(storage, common[0]);
+    render(state, common);
     return;
   }
 
   if (widgetAction === "WIDGET_CLICK") {
-    const [exercises, unit, theme, accentColor] = await Promise.all([
-      readExercises(storage),
-      readUnit(storage),
-      readTheme(storage),
-      readAccentColor(storage),
-    ]);
-    let snapshot;
+    const common = await readCommon();
+    const exercises = common[0];
+    let state;
+
+    if (SET_EDIT_ACTIONS.has(clickAction)) {
+      switch (clickAction) {
+        case "REPS_PLUS":
+          await focusAdjustReps(storage, exercises, clickActionData?.setId, REP_STEP);
+          break;
+        case "REPS_MINUS":
+          await focusAdjustReps(storage, exercises, clickActionData?.setId, -REP_STEP);
+          break;
+        case "WEIGHT_PLUS":
+          await focusAdjustWeight(storage, exercises, clickActionData?.setId, WEIGHT_STEP);
+          break;
+        case "WEIGHT_MINUS":
+          await focusAdjustWeight(storage, exercises, clickActionData?.setId, -WEIGHT_STEP);
+          break;
+        case "ADD_SET":
+          await focusAddSet(storage, exercises, clickActionData?.exerciseId);
+          break;
+        case "REMOVE_SET":
+          await focusRemoveSet(storage, exercises, clickActionData?.setId);
+          break;
+        case "TOGGLE_WARMUP":
+          await focusToggleWarmup(storage, exercises, clickActionData?.setId);
+          break;
+        case "PREV_STEP":
+          await focusNavigateStep(storage, exercises, -1);
+          break;
+        case "NEXT_STEP":
+          await focusNavigateStep(storage, exercises, 1);
+          break;
+        case "SCROLL_UP":
+          await focusScrollSets(storage, exercises, -1);
+          break;
+        case "SCROLL_DOWN":
+          await focusScrollSets(storage, exercises, 1);
+          break;
+      }
+      // Each of these mutates the workout/pointer directly rather than
+      // returning a full widget-nav-aware state, so re-resolving is what
+      // picks the change back up onto the (still-current) "focus" screen.
+      state = await resolveWidgetState(storage, exercises);
+      render(state, common);
+      return;
+    }
+
     switch (clickAction) {
-      case "REPS_PLUS":
-        snapshot = await focusAdjustReps(storage, exercises, clickActionData?.setId, REP_STEP);
+      case "WEEK_PREV":
+        state = await widgetShiftWeek(storage, exercises, -1);
         break;
-      case "REPS_MINUS":
-        snapshot = await focusAdjustReps(storage, exercises, clickActionData?.setId, -REP_STEP);
+      case "WEEK_NEXT":
+        state = await widgetShiftWeek(storage, exercises, 1);
         break;
-      case "WEIGHT_PLUS":
-        snapshot = await focusAdjustWeight(storage, exercises, clickActionData?.setId, WEIGHT_STEP);
+      case "SELECT_DAY":
+        state = await widgetSelectDay(storage, exercises, clickActionData?.dateKey);
         break;
-      case "WEIGHT_MINUS":
-        snapshot = await focusAdjustWeight(storage, exercises, clickActionData?.setId, -WEIGHT_STEP);
+      case "BACK_TO_WEEK":
+        state = await widgetBackToWeek(storage, exercises);
         break;
-      case "ADD_SET":
-        snapshot = await focusAddSet(storage, exercises, clickActionData?.exerciseId);
+      case "DAY_PREV":
+        state = await widgetShiftDay(storage, exercises, -1);
         break;
-      case "REMOVE_SET":
-        snapshot = await focusRemoveSet(storage, exercises, clickActionData?.setId);
+      case "DAY_NEXT":
+        state = await widgetShiftDay(storage, exercises, 1);
         break;
-      case "TOGGLE_WARMUP":
-        snapshot = await focusToggleWarmup(storage, exercises, clickActionData?.setId);
+      case "OPEN_WORKOUT":
+        state = await widgetOpenWorkout(storage, exercises, clickActionData?.dateKey, clickActionData?.workoutId);
         break;
-      case "PREV_STEP":
-        snapshot = await focusNavigateStep(storage, exercises, -1);
+      case "START_WORKOUT":
+        state = await widgetStartWorkout(storage, exercises, clickActionData?.dateKey);
         break;
-      case "NEXT_STEP":
-        snapshot = await focusNavigateStep(storage, exercises, 1);
+      case "END_WORKOUT":
+        state = await widgetEndWorkout(storage, exercises);
         break;
-      case "SCROLL_UP":
-        snapshot = await focusScrollSets(storage, exercises, -1);
+      case "RESUME_WORKOUT":
+        state = await widgetResumeWorkout(storage, exercises);
         break;
-      case "SCROLL_DOWN":
-        snapshot = await focusScrollSets(storage, exercises, 1);
+      case "BACK_TO_DAY":
+        state = await widgetBackFromFocus(storage, exercises);
         break;
       case "REFRESH_WIDGET":
-        snapshot = await readFocusSnapshot(storage, exercises);
-        renderWidget(<FocusWidget snapshot={snapshot} unit={unit} theme={theme} accentColor={accentColor} refreshing />);
+        state = await resolveWidgetState(storage, exercises);
+        render(state, common, true);
         await wait(REFRESH_LABEL_VISIBLE_MS);
         break;
       default:
-        snapshot = await readFocusSnapshot(storage, exercises);
+        state = await resolveWidgetState(storage, exercises);
     }
-    renderWidget(<FocusWidget snapshot={snapshot} unit={unit} theme={theme} accentColor={accentColor} />);
+    render(state, common);
   }
 }

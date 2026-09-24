@@ -21,16 +21,28 @@ export const Counter = forwardRef(function Counter({ label, value, onInc, onDec,
   const height = COUNTER_HEIGHT[size];
   const buttonWidth = COUNTER_BUTTON_WIDTH[size];
 
-  // The input mirrors `value` (a parsed number) rather than being driven by
-  // it directly, so an in-progress fraction like "12." isn't immediately
-  // re-rendered back to "12" — parseFloat("12.") === 12, which would strip
-  // the trailing "." (and, by extension, any decimal at all) before the
-  // user can type the digit after it. Only resyncs from `value` when it's
-  // changed for a reason other than this input's own typing (+/- buttons,
-  // unit conversion).
-  const [text, setText] = useState(String(value));
+  // `value` is "blank" (as opposed to a real number, including a real 0)
+  // when the caller passes "" or NaN — callers use that to mean "the
+  // underlying field is currently empty/unparseable, still being edited,
+  // don't coerce it to 0 yet". Kept local rather than shared: this is
+  // string/NaN plumbing specific to how Counter's text mirrors `value`.
+  const isBlank = (v) => v === "" || Number.isNaN(v);
+
+  // The input mirrors `value` (a parsed number, or blank) rather than being
+  // driven by it directly, so an in-progress fraction like "12." isn't
+  // immediately re-rendered back to "12" — parseFloat("12.") === 12, which
+  // would strip the trailing "." (and, by extension, any decimal at all)
+  // before the user can type the digit after it. Only resyncs from `value`
+  // when it's changed for a reason other than this input's own typing (+/-
+  // buttons, unit conversion) — and while `value` is blank, resyncs to ""
+  // rather than "NaN"/"0", so a cleared field stays blank instead of
+  // snapping to 0 mid-edit (the caller coerces blank -> 0 only once it's
+  // done editing, e.g. on modal close).
+  const [text, setText] = useState(isBlank(value) ? "" : String(value));
   useEffect(() => {
-    if (parseFloat(text) !== value) setText(String(value));
+    const parsed = parseFloat(text);
+    const inSync = isBlank(value) ? Number.isNaN(parsed) : parsed === value;
+    if (!inSync) setText(isBlank(value) ? "" : String(value));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
@@ -44,7 +56,9 @@ export const Counter = forwardRef(function Counter({ label, value, onInc, onDec,
   // — skipped if `text` doesn't actually parse to `value` (e.g. empty input),
   // same guard as the `value`-driven resync above.
   const handleBlur = () => {
-    if (parseFloat(text) === value) setText(String(value));
+    const parsed = parseFloat(text);
+    const inSync = isBlank(value) ? Number.isNaN(parsed) : parsed === value;
+    if (inSync) setText(isBlank(value) ? "" : String(value));
   };
 
   const ValueWrapper = onPress ? Pressable : View;

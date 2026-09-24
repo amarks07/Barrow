@@ -7,22 +7,32 @@ import { CounterEditModal } from "./CounterEditModal";
 const roundTenth = (n) => Math.round(n * 10) / 10;
 const identity = (n) => n;
 
+// A field's config `value` is left blank ("" or NaN, depending on the
+// source — convertWeight/convertSpeed/convertDistance return "" for an
+// empty/unparseable input, parseFloat returns NaN) rather than coerced to 0
+// here, so the Counter rendered inside the open edit modal can tell "the
+// user cleared this and is still typing" apart from a real 0 and keep the
+// input blank instead of snapping to "0" mid-edit. Anything that needs a
+// real number (the +/- step math below, the inline row's display-only
+// Counter) coerces blank -> 0 itself via `isBlank`.
+const isBlank = (v) => v === "" || Number.isNaN(v);
+
 function getFieldConfig(key, set, unit) {
   switch (key) {
     case "weight":
-      return { label: unit.toUpperCase(), value: convertWeight(set.weight, set.unit, unit) || 0, step: unit === "kg" ? 2.5 : 5, round: roundHalf };
+      return { label: unit.toUpperCase(), value: convertWeight(set.weight, set.unit, unit), step: unit === "kg" ? 2.5 : 5, round: roundHalf };
     case "reps":
-      return { label: "REPS", value: parseFloat(set.reps) || 0, step: 1, round: identity };
+      return { label: "REPS", value: parseFloat(set.reps), step: 1, round: identity };
     case "time":
-      return { label: "MIN", value: parseFloat(set.time) || 0, step: 1, round: roundHalf };
+      return { label: "MIN", value: parseFloat(set.time), step: 1, round: roundHalf };
     case "speed":
-      return { label: unit === "kg" ? "KM/H" : "MPH", value: convertSpeed(set.speed, set.unit, unit) || 0, step: unit === "kg" ? 1 : 0.5, round: roundHalf };
+      return { label: unit === "kg" ? "KM/H" : "MPH", value: convertSpeed(set.speed, set.unit, unit), step: unit === "kg" ? 1 : 0.5, round: roundHalf };
     case "distance":
-      return { label: unit === "kg" ? "KM" : "MI", value: convertDistance(set.distance, set.unit, unit) || 0, step: 0.1, round: roundTenth };
+      return { label: unit === "kg" ? "KM" : "MI", value: convertDistance(set.distance, set.unit, unit), step: 0.1, round: roundTenth };
     case "calories":
-      return { label: "CAL", value: parseFloat(set.calories) || 0, step: 5, round: identity };
+      return { label: "CAL", value: parseFloat(set.calories), step: 5, round: identity };
     case "rpe":
-      return { label: "RPE", value: parseFloat(set.rpe) || 0, step: 0.5, round: roundHalf };
+      return { label: "RPE", value: parseFloat(set.rpe), step: 0.5, round: roundHalf };
     default:
       return null;
   }
@@ -49,13 +59,22 @@ export function FieldsRow({ fields, set, unit, plateCalculatorEnabled, onUpdate,
 
   const incDec = (key) => {
     const { value, step, round } = configs[key];
+    const numeric = isBlank(value) ? 0 : value;
     return {
-      onInc: () => onUpdate(key, round(value + step)),
-      onDec: () => onUpdate(key, round(Math.max(0, value - step))),
+      onInc: () => onUpdate(key, round(numeric + step)),
+      onDec: () => onUpdate(key, round(Math.max(0, numeric - step))),
     };
   };
 
   const openConfig = openField ? configs[openField] : null;
+
+  // Closing the modal is when a still-blank field is finally forced to 0 —
+  // while the modal's open, blank stays blank (see getFieldConfig's
+  // comment) so the user can keep typing a fresh number.
+  const closeField = (key) => {
+    if (isBlank(configs[key]?.value)) onUpdate(key, 0);
+    setOpenField(null);
+  };
 
   return (
     <>
@@ -63,7 +82,7 @@ export function FieldsRow({ fields, set, unit, plateCalculatorEnabled, onUpdate,
         <Counter
           key={key}
           label={configs[key].label}
-          value={configs[key].value}
+          value={isBlank(configs[key].value) ? 0 : configs[key].value}
           onChangeValue={(v) => onUpdate(key, v)}
           {...incDec(key)}
           onPress={() => setOpenField(key)}
@@ -76,7 +95,7 @@ export function FieldsRow({ fields, set, unit, plateCalculatorEnabled, onUpdate,
           showPlateCalculator={plateCalculatorEnabled}
           onChangeValue={(v) => onUpdate("weight", v)}
           {...incDec("weight")}
-          onClose={() => setOpenField(null)}
+          onClose={() => closeField("weight")}
         />
       )}
       {openField && openField !== "weight" && openConfig && (
@@ -86,7 +105,7 @@ export function FieldsRow({ fields, set, unit, plateCalculatorEnabled, onUpdate,
           value={openConfig.value}
           onChangeValue={(v) => onUpdate(openField, v)}
           {...incDec(openField)}
-          onClose={() => setOpenField(null)}
+          onClose={() => closeField(openField)}
         />
       )}
     </>

@@ -5,16 +5,9 @@ export function PreferencesScreen({ navigation }) {
   const {
     unit, setUnit, theme, setTheme, accentColor, setAccentColor, workoutView, setWorkoutView,
     focusSupersetGrouping, setFocusSupersetGrouping,
-    focusNotificationEnabled, setFocusNotificationEnabled,
     plateCalculatorEnabled, setPlateCalculatorEnabled,
     stretchRoutinesEnabled, setStretchRoutinesEnabled,
   } = useAppState();
-
-  // No OS notification tray on web (see focusNotification.web.js), so the
-  // toggle just tracks the preference directly with no permission prompt.
-  const onFocusNotificationToggle = async (value) => {
-    setFocusNotificationEnabled(value);
-  };
 
   return (
     <PreferencesView
@@ -28,8 +21,6 @@ export function PreferencesScreen({ navigation }) {
       onWorkoutViewChange={setWorkoutView}
       focusSupersetGrouping={focusSupersetGrouping}
       onFocusSupersetGroupingChange={setFocusSupersetGrouping}
-      focusNotificationEnabled={focusNotificationEnabled}
-      onFocusNotificationToggle={onFocusNotificationToggle}
       plateCalculatorEnabled={plateCalculatorEnabled}
       onPlateCalculatorEnabledChange={setPlateCalculatorEnabled}
       stretchRoutinesEnabled={stretchRoutinesEnabled}

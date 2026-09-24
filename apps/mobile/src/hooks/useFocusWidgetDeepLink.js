@@ -3,8 +3,7 @@ import * as Linking from "expo-linking";
 import { navigationRef } from "../navigation/navigationRef";
 
 // Receiving end of FocusWidget's "tap a value to type it" links (built by
-// buildFocusDeepLink in src/widget/FocusWidget.js). Mirrors
-// useFocusNotificationNavigation's cold-start + foreground pattern, and
+// buildFocusDeepLink in src/widget/screens/FocusExerciseScreen.js). Mirrors
 // useCloudSync's existing Linking.getInitialURL/addEventListener usage for
 // the password-reset deep link — same expo-linking APIs, just a different
 // scheme host ("focus" instead of a Supabase redirect).

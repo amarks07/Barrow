@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { remapExerciseFields, setEntryExcluded, setEntryNote } from "@barrow/core";
 import { useAppState } from "../../state/AppStateProvider";
 import { HistoryView } from "../../components/history/HistoryView";
 
@@ -7,7 +8,7 @@ import { HistoryView } from "../../components/history/HistoryView";
 // it's open, back out instead of rendering with an undefined exercise.
 export function HistoryScreen({ route, navigation }) {
   const { exerciseId } = route.params;
-  const { exercises, workouts, unit } = useAppState();
+  const { exercises, exerciseNotes, exerciseActions, workouts, setWorkouts, unit } = useAppState();
   const exercise = exercises.find((e) => e.id === exerciseId);
 
   useEffect(() => {
@@ -21,6 +22,14 @@ export function HistoryScreen({ route, navigation }) {
       exercise={exercise}
       workouts={workouts}
       unit={unit}
+      exerciseNote={exerciseNotes[exerciseId]}
+      onChangeExerciseNote={(note) => exerciseActions.setExerciseNote(exerciseId, note)}
+      onChangeEntryNote={(dateKey, workoutId, note) => setWorkouts((prev) => setEntryNote(prev, dateKey, workoutId, exerciseId, note))}
+      onToggleExcluded={(dateKey, excluded) => setWorkouts((prev) => setEntryExcluded(prev, dateKey, exerciseId, excluded))}
+      onSaveFields={(fields, fieldMap) => {
+        if (Object.keys(fieldMap).length > 0) setWorkouts((prev) => remapExerciseFields(prev, exerciseId, fieldMap));
+        exerciseActions.updateExerciseFields(exercise, fields, exercise.setFormat);
+      }}
       onBack={() => navigation.goBack()}
       onOpenFocus={(dateKey, workoutId) => navigation.navigate("ExerciseFocus", { dateKey, workoutId, exerciseId })}
     />

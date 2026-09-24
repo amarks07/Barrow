@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "407250107732",
+    "project_id": "barow-7c74a",
+    "storage_bucket": "barow-7c74a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:407250107732:android:202119d6836cf6ca075cc1",
+        "android_client_info": {
+          "package_name": "com.barrow.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDaoh4m-qK93OFEeXkNB-bv6e2uHFSR3tE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:407250107732:android:881535ff1d06271c075cc1",
+        "android_client_info": {
+          "package_name": "com.barrow.app.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDaoh4m-qK93OFEeXkNB-bv6e2uHFSR3tE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

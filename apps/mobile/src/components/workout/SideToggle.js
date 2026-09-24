@@ -1,110 +1,65 @@
-import { useRef, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
-import { ArrowLeft, ArrowLeftRight, ArrowRight } from "lucide-react-native";
+import { Pressable, View } from "react-native";
+import { Hand } from "lucide-react-native";
 import { useTheme } from "../../theme/ThemeProvider";
 import { BUTTON_HEIGHT } from "../../theme/dimensions";
-import { FONT_DISPLAY } from "../../theme/fonts";
 
+// "Together" is a pair of hands (one flipped horizontally to face the
+// other, as if clasped); "separate" is a single hand tracked on its own.
 const OPTIONS = [
-  { value: "left", Icon: ArrowLeft, label: "Left arm" },
-  { value: "both", Icon: ArrowLeftRight, label: "Both arms" },
-  { value: "right", Icon: ArrowRight, label: "Right arm" },
+  { value: "together", hands: 2, label: "Together" },
+  { value: "separate", hands: 1, label: "Track sides separately" },
 ];
 
-const OPTION_HEIGHT = 40;
-const MENU_WIDTH = 140;
-
-// Collapsed icon button for which arm(s) a set was performed with. Opens a
-// vertical dropdown of the three options directly below it, over a dimmed
-// backdrop — rather than AngleToggle's always-visible inline segments —
-// since this sits in the tight middle of a set's header row where three
-// segments side by side would crowd the label/action buttons on either
-// side. measureInWindow anchors the dropdown to the button's actual screen
-// position since the Modal it renders into is a separate native root.
+// Inline two-option switch for whether a set is performed together (one
+// shared rep count) or with each side tracked separately (see
+// SplitRepsRow). An always-visible segmented pill, same shape as
+// AngleToggle, rather than the dropdown-of-three this used to be for
+// left/both/right — that dropdown existed to avoid crowding this row with
+// three segments; with only two options a pill fits inline fine.
 export function SideToggle({ value, onChange }) {
   const { tokens } = useTheme();
-  const anchorRef = useRef(null);
-  const [anchor, setAnchor] = useState(null);
-
-  const current = OPTIONS.find((o) => o.value === value) || OPTIONS[1];
-
-  const openMenu = () => {
-    anchorRef.current?.measureInWindow((x, y, width, height) => setAnchor({ x, y, width, height }));
-  };
-
-  const select = (optValue) => {
-    onChange(optValue);
-    setAnchor(null);
-  };
-
   return (
-    <>
-      <Pressable
-        ref={anchorRef}
-        onPress={openMenu}
-        accessibilityLabel={current.label}
-        className="items-center justify-center"
-        style={{
-          width: BUTTON_HEIGHT.small,
-          height: BUTTON_HEIGHT.small,
-          borderRadius: 999,
-          backgroundColor: tokens.surface,
-          borderWidth: 1.5,
-          borderColor: tokens.lineStrong,
-        }}
-      >
-        <current.Icon size={14} color={tokens.textDim} />
-      </Pressable>
-
-      {anchor && (
-        <Modal transparent animationType="none" visible onRequestClose={() => setAnchor(null)}>
+    <View
+      className="flex-row items-center p-1 rounded-full"
+      style={{ backgroundColor: tokens.surface, borderWidth: 1.5, borderColor: tokens.lineStrong }}
+    >
+      {OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        return (
           <Pressable
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)" }}
-            onPress={() => setAnchor(null)}
-          />
-          <View
+            // Keyed on active too, not just opt.value — see AngleToggle's
+            // matching comment for why a stable style object alone isn't
+            // enough here.
+            key={`${opt.value}-${active}`}
+            onPress={() => onChange(opt.value)}
+            accessibilityLabel={opt.label}
+            accessibilityState={{ selected: active }}
+            className="items-center justify-center"
             style={{
-              position: "absolute",
-              top: anchor.y + anchor.height + 6,
-              left: Math.max(8, anchor.x + anchor.width / 2 - MENU_WIDTH / 2),
-              width: MENU_WIDTH,
-              borderRadius: 12,
-              borderWidth: 1.5,
-              borderColor: tokens.lineStrong,
-              backgroundColor: tokens.bg,
-              overflow: "hidden",
+              width: BUTTON_HEIGHT.small,
+              height: BUTTON_HEIGHT.small,
+              borderRadius: 999,
+              backgroundColor: active ? tokens.accent : "transparent",
             }}
           >
-            {OPTIONS.map((opt) => {
-              const active = opt.value === value;
-              return (
-                <Pressable
-                  key={opt.value}
-                  onPress={() => select(opt.value)}
-                  className="flex-row items-center gap-2 px-3"
-                  style={{
-                    height: OPTION_HEIGHT,
-                    backgroundColor: active ? tokens.accent : "transparent",
-                  }}
-                >
-                  <opt.Icon size={14} color={active ? "#121214" : tokens.textDim} />
-                  <Text
-                    style={{
-                      fontFamily: FONT_DISPLAY,
-                      fontSize: 12,
-                      textTransform: "uppercase",
-                      includeFontPadding: false,
-                      color: active ? "#121214" : tokens.text,
-                    }}
-                  >
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Modal>
-      )}
-    </>
+            {opt.hands === 2 ? (
+              <View style={{ flexDirection: "row", gap: 2 }}>
+                {/* Transform lives on a wrapping View, not the Hand's own
+                    style prop — lucide's Icon spreads `style` onto every
+                    internal SVG path, so a transform passed directly to
+                    Hand distorts each path individually instead of
+                    flipping the icon as a whole. */}
+                <View style={{ transform: [{ scaleX: -1 }] }}>
+                  <Hand size={12} color={active ? "#121214" : tokens.textDim} />
+                </View>
+                <Hand size={12} color={active ? "#121214" : tokens.textDim} />
+              </View>
+            ) : (
+              <Hand size={14} color={active ? "#121214" : tokens.textDim} />
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }

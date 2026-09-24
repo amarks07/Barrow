@@ -10,6 +10,8 @@ import {
   dayLabel,
   exerciseMeta,
   fmtNum,
+  getPreviousSessionSets,
+  getPreviousWarmupSets,
   getRecommendation,
   getRepRange,
   runInfo,
@@ -18,6 +20,7 @@ import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
 import { ConfirmDeleteIconButton } from "../ui/ConfirmDeleteIconButton";
 import { NoteButton, NoteModal } from "../ui/NoteField";
+import { ExerciseNotesModal } from "../ui/ExerciseNotesModal";
 import { Card } from "../ui/Card";
 import { ExercisePicker } from "../exercises/ExercisePicker";
 import { SetCounters } from "./SetCounters";
@@ -41,14 +44,16 @@ const DROP_AT_END = "__drop-at-end__";
 // per-instance hook, and hooks can't be called a variable number of times
 // inside a .map() in the parent.
 function WorkoutEntryRow({
-  entry, ex, isSingle, isOpen, rec, prefill, unit, workoutView, plateCalculatorEnabled, supersetMode, isSelected,
-  isDragging, dragOffsetY, shiftY, run, tokens,
+  entry, ex, isSingle, isOpen, rec, prevSession, prevWarmups, prefill, unit, workoutView, plateCalculatorEnabled, supersetMode, isSelected,
+  isDragging, dragOffsetY, shiftY, run, tokens, dateKey, exerciseNotes, onChangeExerciseNote,
   refCallback, gesture, onRowTap, onOpenHistory, onSwap, onRemoveExercise, onSetAngle, onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote,
 }) {
   const shiftShared = useSharedValue(0);
   const [noteOpen, setNoteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const isStretch = ex.type === "stretch";
+  const hasSuggestion = entry.sets.length === 0 && !!rec;
+  const copyWarmups = () => prevWarmups.forEach((preset) => onAddSet(entry.exerciseId, preset));
 
   useEffect(() => {
     if (isDragging) return;
@@ -86,7 +91,7 @@ function WorkoutEntryRow({
           borderTopWidth: 1.5,
           borderTopColor: "transparent",
           borderBottomWidth: 1.5,
-          borderBottomColor: tokens.line,
+          borderBottomColor: isDragging ? "transparent" : tokens.line,
         }}
       >
         <View className="flex-row items-center justify-between gap-2" style={{ flex: 1, paddingTop: 16, paddingBottom: 16 }}>
@@ -228,11 +233,13 @@ function WorkoutEntryRow({
       </View>
 
       {noteOpen && (
-        <NoteModal
-          title={`${ex.name} note`}
-          value={entry.note}
-          onChange={(note) => onSetEntryNote(entry.exerciseId, note)}
-          placeholder="Add exercise note"
+        <ExerciseNotesModal
+          exerciseName={ex.name}
+          dateKey={dateKey}
+          exerciseNote={exerciseNotes[entry.exerciseId]}
+          onChangeExerciseNote={(note) => onChangeExerciseNote(entry.exerciseId, note)}
+          dayNote={entry.note}
+          onChangeDayNote={(note) => onSetEntryNote(entry.exerciseId, note)}
           onClose={() => setNoteOpen(false)}
         />
       )}
@@ -266,15 +273,32 @@ function WorkoutEntryRow({
             <SingleCounters entry={entry} ex={ex} unit={unit} plateCalculatorEnabled={plateCalculatorEnabled} onAddSet={onAddSet} onUpdateSet={onUpdateSet} />
           ) : (
             <>
-              {entry.sets.length === 0 && rec && (
-                <Text style={{ fontSize: 11, color: tokens.textDim }} className="mb-3">
-                  Last: {fmtNum(rec.lastWeight)} {unit} × {fmtNum(rec.lastReps)} · {rec.note}
+              {prevSession && (
+                <Text style={{ fontSize: 11, color: tokens.textDim }} className={prevSession.max || hasSuggestion ? "mb-1" : "mb-3"}>
+                  Previous 1st set: {fmtNum(prevSession.first.weight)} {unit} × {fmtNum(prevSession.first.reps)}
                 </Text>
+              )}
+
+              {prevSession?.max && (
+                <Text style={{ fontSize: 11, color: tokens.textDim }} className={hasSuggestion ? "mb-1" : "mb-3"}>
+                  Previous max set: {fmtNum(prevSession.max.weight)} {unit} × {fmtNum(prevSession.max.reps)}
+                </Text>
+              )}
+
+              {hasSuggestion && (
+                <Text style={{ fontSize: 11, color: tokens.textDim }} className="mb-3">
+                  Suggested: {fmtNum(rec.recWeight)} {unit} × {fmtNum(rec.recReps)} · {rec.note}
+                </Text>
+              )}
+
+              {entry.sets.length === 0 && prevWarmups.length > 0 && (
+                <Button label="Copy warmups" size="small" onPress={copyWarmups} style={{ marginBottom: 12 }} />
               )}
 
               {entry.sets.map((set) => (
                 <SetCounters
                   key={set.id}
+                  fields={ex.fields}
                   sets={entry.sets}
                   set={set}
                   unit={unit}
@@ -319,7 +343,7 @@ export function DayView({
   onSetNote, onAddExercise, onRemoveExercise, onSwapExercise,
   onAddSet, onUpdateSet, onRemoveSet, onSetEntryNote, onApplyRoutine, onOpenHistory, onSaveAsRoutine, onUpdateRoutine, onSetAngle,
   onAddCustomExercise, onReorderExercise, onCreateSuperset, onUngroupSuperset, workoutView, plateCalculatorEnabled, onOpenExerciseFocus,
-  onOpenSummary,
+  onOpenSummary, exerciseNotes, onChangeExerciseNote,
 }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -622,9 +646,7 @@ export function DayView({
                   <Button label="Summary" onPress={() => onOpenSummary(workout.id)} icon={<ChartColumn size={12} color={tokens.textDim} />} />
                 )}
               </View>
-              {dayWorkouts.length > 1 && (
-                <ConfirmDeleteIconButton onConfirm={() => onDeleteWorkout(workout.id)} label="Delete workout" size={18} standardSize />
-              )}
+              <ConfirmDeleteIconButton onConfirm={() => onDeleteWorkout(workout.id)} label="Delete workout" size={18} standardSize />
             </>
           )}
         </View>
@@ -678,14 +700,23 @@ export function DayView({
           const { repLow, repHigh } = routineRange
             ? { repLow: routineRange.min, repHigh: routineRange.max }
             : getRepRange(entry.exerciseId, workouts, workout.id);
-          const rec = !isSingle && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workout.id, repLow, repHigh) : null;
+          // Suggested next weight/reps is progression math against a target
+          // range, so — like ExerciseFocusView's ExercisePanel — it only
+          // shows for an exercise with a routine-defined range, not just any
+          // exercise with logged history.
+          const rec = !isSingle && entry.sets.length === 0 && routineRange ? getRecommendation(entry.exerciseId, workouts, unit, workout.id, repLow, repHigh) : null;
           // The very first set of an entry is left blank rather than
           // auto-filled from `rec` — only a same-session prior set (lastSet)
-          // prefills the next one. `rec` is still computed above so the
-          // "Last: ..." reference line in WorkoutEntryRow has something to show.
+          // prefills the next one.
           const prefill = lastSet
             ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
             : null;
+          // Previous-session "1st set"/"max set" reference lines and the
+          // "copy warmups" preset list, mirroring ExerciseFocusView's
+          // ExercisePanel — shown any time there's prior-session data, not
+          // just before the first set is logged.
+          const prevSession = !isSingle ? getPreviousSessionSets(entry.exerciseId, workouts, unit, workout.id) : null;
+          const prevWarmups = !isSingle ? getPreviousWarmupSets(entry.exerciseId, workouts, unit, workout.id) : [];
 
           const isDragging = draggingGroupIds.has(entry.exerciseId);
           const isSelected = supersetSelection.includes(entry.exerciseId);
@@ -708,6 +739,8 @@ export function DayView({
               isSingle={isSingle}
               isOpen={isOpen}
               rec={rec}
+              prevSession={prevSession}
+              prevWarmups={prevWarmups}
               prefill={prefill}
               unit={unit}
               workoutView={workoutView}
@@ -719,6 +752,9 @@ export function DayView({
               shiftY={shiftY}
               run={run}
               tokens={tokens}
+              dateKey={dateKey}
+              exerciseNotes={exerciseNotes}
+              onChangeExerciseNote={onChangeExerciseNote}
               refCallback={(node) => {
                 rowRefs.current[entry.exerciseId] = node;
               }}

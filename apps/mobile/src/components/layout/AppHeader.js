@@ -4,6 +4,7 @@ import { Settings, User } from "lucide-react-native";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 import { CountdownButton } from "./CountdownButton";
+import { NotificationBadge } from "../ui/NotificationBadge";
 
 // Persistent top bar — stays put across calendar/exercises/routines.
 // Profile sits far left, wordmark in the middle, preferences gear (plus the
@@ -13,7 +14,7 @@ import { CountdownButton } from "./CountdownButton";
 // centered, right-aligned) — since the outer regions always match width,
 // the wordmark stays pixel-centered no matter how wide the countdown pill
 // on the right gets.
-export function AppHeader({ profile, signedIn, onOpenProfile, onOpenPreferences }) {
+export function AppHeader({ profile, signedIn, unreadCount, onOpenProfile, onOpenPreferences }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   // Only shown once signed in — a signed-out session can still have a
@@ -33,27 +34,30 @@ export function AppHeader({ profile, signedIn, onOpenProfile, onOpenPreferences 
       }}
     >
       <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-start" }}>
-        <Pressable
-          onPress={onOpenProfile}
-          accessibilityLabel="Profile"
-          className="items-center justify-center overflow-hidden"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 999,
-            backgroundColor: tokens.surface,
-            borderWidth: 1.5,
-            borderColor: signedIn ? tokens.accent : tokens.lineStrong,
-          }}
-        >
-          {signedIn && profile?.pictureUrl ? (
-            <Image source={{ uri: profile.pictureUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-          ) : initials ? (
-            <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 12, color: tokens.accent }}>{initials}</Text>
-          ) : (
-            <User size={16} color={signedIn ? tokens.accent : tokens.textDim} />
-          )}
-        </Pressable>
+        <View style={{ width: 32, height: 32 }}>
+          <Pressable
+            onPress={onOpenProfile}
+            accessibilityLabel="Profile"
+            className="items-center justify-center overflow-hidden"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 999,
+              backgroundColor: tokens.surface,
+              borderWidth: 1.5,
+              borderColor: signedIn ? tokens.accent : tokens.lineStrong,
+            }}
+          >
+            {signedIn && profile?.pictureUrl ? (
+              <Image source={{ uri: profile.pictureUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+            ) : initials ? (
+              <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 12, color: tokens.accent }}>{initials}</Text>
+            ) : (
+              <User size={16} color={signedIn ? tokens.accent : tokens.textDim} />
+            )}
+          </Pressable>
+          {unreadCount > 0 && <NotificationBadge style={{ position: "absolute", top: -1, right: -1 }} />}
+        </View>
       </View>
 
       <View style={{ alignItems: "center", justifyContent: "center" }}>

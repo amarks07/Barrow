@@ -75,6 +75,17 @@ function mergeById(localItems, cloudItems) {
   return cloudOnly.length > 0 ? [...localItems, ...cloudOnly] : localItems;
 }
 
+// Same merge-by-id idea as mergeById, but for an id-keyed object rather than
+// an array of {id} — e.g. `exerciseNotes` or `exerciseFieldOverrides`. An id
+// present on both sides keeps the phone's value (mismatched -> phone wins),
+// and an id only present in the cloud gets added locally (empty on phone ->
+// cloud wins).
+function mergeNotesById(localNotes, cloudNotes) {
+  if (!cloudNotes) return localNotes;
+  const cloudOnly = Object.entries(cloudNotes).filter(([id]) => !(id in localNotes));
+  return cloudOnly.length > 0 ? { ...localNotes, ...Object.fromEntries(cloudOnly) } : localNotes;
+}
+
 // Same merge-by-id idea as above, but for `workouts`, which is keyed by
 // date to an array of workouts (each with its own id) rather than a flat
 // array — so the merge happens one date at a time.
@@ -140,11 +151,13 @@ function preferCloud(localValue, cloudValue) {
 // signing in on top of it could lose or have leaked into their account —
 // used by the account-conflict check below, which only needs to fire when
 // there's actually something at stake in the guest bucket.
-function hasMeaningfulLocalData(exercises, routines, workouts, profile) {
+function hasMeaningfulLocalData(exercises, exerciseNotes, exerciseFieldOverrides, routines, workouts, profile) {
   return (
     Object.keys(workouts).length > 0 ||
     routines.length > 0 ||
     exercises.some((e) => e.custom) ||
+    Object.values(exerciseNotes).some(Boolean) ||
+    Object.keys(exerciseFieldOverrides).length > 0 ||
     !!(profile.firstName || profile.lastName || profile.username || profile.birthday || profile.gender || profile.height || profile.weight)
   );
 }
@@ -156,7 +169,7 @@ function hasMeaningfulLocalData(exercises, routines, workouts, profile) {
 // the row right after sign-up, since the DB trigger that creates it
 // (handle_new_user, supabase/schema.sql) only knows `id`/`email`, not any
 // of the local device state this hook pushes once a session exists. Only
-// `backup_data` (exercises/routines/workouts/unit) is gated behind the
+// `backup_data` (exercises/exerciseNotes/routines/workouts/unit) is gated behind the
 // `premium` entitlement (set via billing/admin, never by this client) —
 // see the `!data.premium` branch in syncSession, and the `profile.premium`
 // check inside pushNow below. A signed-in non-premium account still gets
@@ -171,6 +184,8 @@ function hasMeaningfulLocalData(exercises, routines, workouts, profile) {
 export function useCloudSync({
   profile, setProfile, resetProfile,
   exercises, setExercises,
+  exerciseNotes, setExerciseNotes,
+  exerciseFieldOverrides, setExerciseFieldOverrides,
   routines, setRoutines,
   workouts, setWorkouts,
   unit, setUnit,
@@ -554,6 +569,8 @@ export function useCloudSync({
           cloudHasData &&
           localHasData &&
           deepEqual(data.backup_data.exercises ?? {}, customExercises) &&
+          deepEqual(data.backup_data.exerciseNotes ?? {}, exerciseNotes) &&
+          deepEqual(data.backup_data.exerciseFieldOverrides ?? {}, exerciseFieldOverrides) &&
           deepEqual(cloudRoutines ?? {}, routines) &&
           deepEqual(cloudWorkouts, workouts) &&
           (data.backup_data.unit ?? unit) === unit;
@@ -566,11 +583,15 @@ export function useCloudSync({
           // mergeWorkouts just return the local value unchanged when there's
           // no cloud data to merge in.
           const mergedExercises = mergeById(exercises, data.backup_data?.exercises);
+          const mergedExerciseNotes = mergeNotesById(exerciseNotes, data.backup_data?.exerciseNotes);
+          const mergedExerciseFieldOverrides = mergeNotesById(exerciseFieldOverrides, data.backup_data?.exerciseFieldOverrides);
           const mergedRoutines = mergeById(routines, cloudRoutines);
           const mergedWorkouts = mergeWorkouts(workouts, cloudWorkouts);
           const mergedUnit = unit || data.backup_data?.unit;
 
           if (mergedExercises !== exercises) setExercises(mergedExercises);
+          if (mergedExerciseNotes !== exerciseNotes) setExerciseNotes(mergedExerciseNotes);
+          if (mergedExerciseFieldOverrides !== exerciseFieldOverrides) setExerciseFieldOverrides(mergedExerciseFieldOverrides);
           if (mergedRoutines !== routines) setRoutines(mergedRoutines);
           if (mergedWorkouts !== workouts) setWorkouts(mergedWorkouts);
           if (mergedUnit !== unit) setUnit(mergedUnit);
@@ -587,6 +608,8 @@ export function useCloudSync({
               .update({
                 backup_data: {
                   exercises: mergedExercises.filter((e) => e.custom),
+                  exerciseNotes: mergedExerciseNotes,
+                  exerciseFieldOverrides: mergedExerciseFieldOverrides,
                   routines: mergedRoutines,
                   unit: mergedUnit,
                 },
@@ -694,7 +717,8 @@ export function useCloudSync({
         return;
       }
 
-      const guestHasData = activeAccountId == null && hasMeaningfulLocalData(exercises, routines, workouts, profile);
+      const guestHasData =
+        activeAccountId == null && hasMeaningfulLocalData(exercises, exerciseNotes, exerciseFieldOverrides, routines, workouts, profile);
 
       if (guestHasData && !signedUp) {
         pendingConflictRef.current = { session, cancelledRef, email: session.user.email };
@@ -829,7 +853,7 @@ export function useCloudSync({
     // this version drops out the instant this write lands, since a JSONB
     // column UPDATE replaces the whole value, not just the keys named here.
     if (profile.premium) {
-      payload.backup_data = { exercises: exercises.filter((e) => e.custom), routines, unit };
+      payload.backup_data = { exercises: exercises.filter((e) => e.custom), exerciseNotes, exerciseFieldOverrides, routines, unit };
     }
 
     const changedDates = profile.premium ? diffWorkoutDates(workouts, workoutsBaselineRef.current) : [];
@@ -950,7 +974,7 @@ export function useCloudSync({
 
     return () => clearTimeout(pushTimeoutRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, profile, exercises, routines, workouts, unit, syncLocked, localDataHydrated]);
+  }, [session, profile, exercises, exerciseNotes, exerciseFieldOverrides, routines, workouts, unit, syncLocked, localDataHydrated]);
 
   // Manual "Sync now" — skips the debounce and pushes immediately, so a
   // user who wants confidence their latest change is backed up doesn't have
@@ -1138,6 +1162,18 @@ export function useCloudSync({
 
   const signOut = async () => {
     if (!supabase) return;
+    // Best-effort, and done before signOut() itself: once the session is
+    // gone so is the auth needed to write this row as this user (RLS is
+    // auth.uid() = id), so a device that just signed out stops being a
+    // target for pushes meant for the account that left it (see
+    // notify_friendship in supabase/schema.sql).
+    if (session) {
+      try {
+        await supabase.from("profiles").update({ push_token: null }).eq("id", session.user.id);
+      } catch (e) {
+        console.error("Barrow: failed to clear push_token on sign-out", e);
+      }
+    }
     await supabase.auth.signOut();
     biometricUnlockedRef.current = false;
     syncedUserIdRef.current = null;

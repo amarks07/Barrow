@@ -8,7 +8,6 @@ import { WorkoutSummaryView } from "../../components/workout/WorkoutSummaryView"
 import { asyncStorageAdapter } from "../../state/storage";
 import { namespacedKey } from "../../state/accountNamespace";
 import { refreshFocusWidget } from "../../widget/refreshFocusWidget";
-import { refreshFocusNotification } from "../../notification/focusNotification";
 
 const FOCUS_POINTER_KEY = "barrow:focusPointer";
 
@@ -23,7 +22,7 @@ const FOCUS_POINTER_KEY = "barrow:focusPointer";
 function DayPanel({
   dateKey, isActive, initialWorkoutId, navigation,
   exercises, routines, unit, workouts, setWorkouts,
-  nextId, dayWorkoutsActions, routineActions, exerciseActions, workoutView, focusNotificationEnabled,
+  nextId, dayWorkoutsActions, routineActions, exerciseActions, exerciseNotes, workoutView,
   plateCalculatorEnabled, workoutTimerEnabled, workoutTimerStartedAt,
   getOrCreateWorkoutForDate, activeAccountId,
 }) {
@@ -66,8 +65,6 @@ function DayPanel({
   // which close over whatever was current on the render that registered
   // them — a plain render-body assignment (not useEffect) keeps it current
   // every render with no extra effect.
-  const focusNotificationEnabledRef = useRef(focusNotificationEnabled);
-  focusNotificationEnabledRef.current = focusNotificationEnabled;
   const activeAccountIdRef = useRef(activeAccountId);
   activeAccountIdRef.current = activeAccountId;
   const workoutTimerEnabledRef = useRef(workoutTimerEnabled);
@@ -133,9 +130,6 @@ function DayPanel({
         const pointer = { dateKey, workoutId: workout.id, exerciseId: entries[0].exerciseId, updatedAt: Date.now() };
         return asyncStorageAdapter.setItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current), JSON.stringify(pointer)).then(() => {
           refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
-          if (focusNotificationEnabledRef.current === "on") {
-            refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
-          }
         });
       })
       .catch((e) => console.error("Barrow: failed to save barrow:focusPointer", e));
@@ -146,11 +140,11 @@ function DayPanel({
   }, [isActive, screenFocused, dateKey, workout?.id, entries.length, showSummary, workoutTimerEnabled, workoutTimerStartedAt]);
 
   // Drops the pointer the instant the timer that earned it stops (e.g. "End
-  // workout" tapped from Day view), so the notification doesn't linger for
+  // workout" tapped from Day view), so the widget doesn't linger for
   // a workout that's no longer either open in Focus flow or actively timed.
   // Also scoped to screenFocused so this never fires while Focus flow is
   // the one actually holding the pointer — ending the timer from there
-  // shouldn't drop a notification Focus flow's own presence still earns.
+  // shouldn't drop a pointer Focus flow's own presence still earns.
   useEffect(() => {
     const timerRunning = workoutTimerEnabled && !!workoutTimerStartedAt;
     if (!isActive || !screenFocused || timerRunning || !workout) return;
@@ -163,9 +157,6 @@ function DayPanel({
         if (!existing || existing.dateKey !== dateKey || existing.workoutId !== workout.id) return;
         return asyncStorageAdapter.removeItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current)).then(() => {
           refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
-          if (focusNotificationEnabledRef.current === "on") {
-            refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
-          }
         });
       })
       .catch((e) => console.error("Barrow: failed to clear barrow:focusPointer", e));
@@ -182,7 +173,7 @@ function DayPanel({
   // panel did. Skipped while the workout timer is still running (read via
   // ref, since this closure is captured at mount) — leaving the day, or
   // swiping it out of the pager's 3-day window, shouldn't kill the
-  // notification for a workout still actively in progress; only ending the
+  // pointer for a workout still actively in progress; only ending the
   // timer (handled above) or its own timer-stop effect does that.
   useEffect(
     () => () => {
@@ -195,9 +186,6 @@ function DayPanel({
           if (!existing || existing.dateKey !== trackedDateKey || existing.workoutId !== trackedWorkoutId) return;
           return asyncStorageAdapter.removeItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current)).then(() => {
             refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
-            if (focusNotificationEnabledRef.current === "on") {
-              refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
-            }
           });
         })
         .catch((e) => console.error("Barrow: failed to clear barrow:focusPointer", e));
@@ -272,6 +260,8 @@ function DayPanel({
       workoutView={workoutView}
       plateCalculatorEnabled={plateCalculatorEnabled}
       onOpenExerciseFocus={(exerciseId) => navigation.navigate("ExerciseFocus", { dateKey, workoutId: selectedWorkoutId, exerciseId })}
+      exerciseNotes={exerciseNotes}
+      onChangeExerciseNote={(exerciseId, note) => exerciseActions.setExerciseNote(exerciseId, note)}
       {...workoutActions}
     />
   );
@@ -286,7 +276,7 @@ export function DayScreen({ route, navigation }) {
   const { dateKey: initialDateKey, workoutId: initialWorkoutId } = route.params;
   const {
     exercises, routines, unit, workouts, setWorkouts,
-    nextId, dayWorkoutsActions, routineActions, exerciseActions, workoutView, focusNotificationEnabled,
+    nextId, dayWorkoutsActions, routineActions, exerciseActions, exerciseNotes, workoutView,
     plateCalculatorEnabled, workoutTimerEnabled, workoutTimerStartedAt,
     getOrCreateWorkoutForDate, activeAccountId,
   } = useAppState();
@@ -331,8 +321,8 @@ export function DayScreen({ route, navigation }) {
           dayWorkoutsActions={dayWorkoutsActions}
           routineActions={routineActions}
           exerciseActions={exerciseActions}
+          exerciseNotes={exerciseNotes}
           workoutView={workoutView}
-          focusNotificationEnabled={focusNotificationEnabled}
           plateCalculatorEnabled={plateCalculatorEnabled}
           workoutTimerEnabled={workoutTimerEnabled}
           workoutTimerStartedAt={workoutTimerStartedAt}

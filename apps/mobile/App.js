@@ -27,14 +27,19 @@ import { ConfirmActionModal } from "./src/components/ui/ConfirmActionModal";
 import { ErrorModal } from "./src/components/ui/ErrorModal";
 import { ProfileOnboardingModal } from "./src/components/profile/ProfileOnboardingModal";
 import { PatchNotesModal } from "./src/components/patchnotes/PatchNotesModal";
+import { AnnouncementModal } from "./src/components/announcements/AnnouncementModal";
+import { UrgentNotificationModal } from "./src/components/profile/UrgentNotificationModal";
+import { UpdateAvailableModal } from "./src/components/appversion/UpdateAvailableModal";
 import { ImportRoutineModal } from "./src/components/routines/ImportRoutineModal";
 import { WorkoutTimerBadge } from "./src/components/workout/WorkoutTimerBadge";
 import { LastSyncedFooter } from "./src/components/layout/LastSyncedFooter";
-import { useFocusNotificationNavigation } from "./src/hooks/useFocusNotificationNavigation";
+import { usePushToken } from "./src/hooks/usePushToken";
+import { usePushNotificationNavigation } from "./src/hooks/usePushNotificationNavigation";
 import { useFocusWidgetDeepLink } from "./src/hooks/useFocusWidgetDeepLink";
 import { useShareDeepLink } from "./src/hooks/useShareDeepLink";
 import { useProfileOnboarding } from "./src/hooks/useProfileOnboarding";
 import { usePatchNotes } from "./src/hooks/usePatchNotes";
+import { useAnnouncement } from "./src/hooks/useAnnouncement";
 import { clearStaleFocusPointer } from "./src/state/staleFocusPointer";
 import { CURRENT_PATCH_NOTES } from "./src/content/patchNotes";
 
@@ -60,10 +65,11 @@ function AppStatusBar() {
 // behavior as the web app's z-50 overlay.
 function ThemedApp() {
   const {
-    theme, accentColor, cloudSync, focusNotificationEnabled, profile, profileHydrated, updateProfile, activeAccountId,
-    exercises, setExercises, routineActions,
+    theme, accentColor, cloudSync, notificationsEnabled, profile, profileHydrated, updateProfile, activeAccountId,
+    exercises, setExercises, routineActions, appVersionCheck, notifications,
   } = useAppState();
-  useFocusNotificationNavigation();
+  usePushToken(cloudSync.session, notificationsEnabled);
+  usePushNotificationNavigation();
   useFocusWidgetDeepLink();
   // A friend/routine QR code scanned by the phone's own camera app (rather
   // than Barrow's in-app scanner) opens the app via a barrow:// link instead
@@ -75,6 +81,7 @@ function ThemedApp() {
   useShareDeepLink(setIncomingShare);
   const profileOnboarding = useProfileOnboarding(profile, profileHydrated, cloudSync);
   const patchNotes = usePatchNotes();
+  const announcement = useAnnouncement();
   return (
     <ThemeProvider theme={theme} accent={accentColor}>
       {/* Navigation and the workout timer badge are scoped to this flex:1
@@ -96,7 +103,7 @@ function ThemedApp() {
           // catch on its own since a fresh launch has no prior state to
           // transition from.
           onReady={() => {
-            clearStaleFocusPointer(focusNotificationEnabled, activeAccountId).catch((e) =>
+            clearStaleFocusPointer(activeAccountId).catch((e) =>
               console.error("Barrow: failed to clear stale barrow:focusPointer", e)
             );
           }}
@@ -129,6 +136,20 @@ function ThemedApp() {
           />
         )}
         {patchNotes.visible && <PatchNotesModal entry={CURRENT_PATCH_NOTES} onClose={patchNotes.dismiss} />}
+        {announcement.visible && <AnnouncementModal announcement={announcement.announcement} onClose={announcement.dismiss} />}
+        {notifications.urgentItem && (
+          <UrgentNotificationModal
+            notification={notifications.urgentItem}
+            onClose={() => notifications.markRead(notifications.urgentItem)}
+          />
+        )}
+        {appVersionCheck.visible && (
+          <UpdateAvailableModal
+            latestVersion={appVersionCheck.latestVersion}
+            onDismiss={appVersionCheck.dismiss}
+            onDismissForever={appVersionCheck.dismissForever}
+          />
+        )}
         {incomingShare?.type === "friend" &&
           (cloudSync.session ? (
             <IncomingFriendShareModal session={cloudSync.session} data={incomingShare.data} onClose={() => setIncomingShare(null)} />

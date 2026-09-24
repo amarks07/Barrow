@@ -7,6 +7,7 @@ import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 import { CHIP_HEIGHT } from "../../theme/dimensions";
 import { Button } from "../ui/Button";
+import { Switch } from "../ui/Switch";
 
 const SET_FORMATS = [
   { value: "sets", label: "Sets" },
@@ -30,10 +31,18 @@ export function AddCustomExerciseModal({ onClose, onSave }) {
   const initialDefaults = useRef(defaultsForCategory(CATEGORIES[0])).current;
   const [fields, setFields] = useState(initialDefaults.fields);
   const [setFormat, setSetFormat] = useState(initialDefaults.setFormat);
+  const [hasAngles, setHasAngles] = useState(false);
 
   const toggleField = (key) => {
     setFields((cur) => (cur.includes(key) ? cur.filter((f) => f !== key) : [...cur, key]));
   };
+
+  // Angle variants (Flat/Incline/Decline) are a weighted-sets concept — like
+  // Bench Press, the built-in exercise this mirrors — so the toggle is
+  // hidden for Cardio, which never uses the "sets" format. Gating at save
+  // time (not just render) means a stale on-toggle from before switching
+  // into Cardio can never leak an angled Cardio exercise through.
+  const isCardio = category === "Cardio";
 
   const slideAnim = useRef(new Animated.Value(1000)).current;
   useEffect(() => {
@@ -162,11 +171,21 @@ export function AddCustomExerciseModal({ onClose, onSave }) {
               );
             })}
           </View>
+          {!isCardio && (
+            <View className="flex-row items-center justify-between mb-6">
+              <Text style={{ fontSize: 15, color: tokens.text }}>Angle variants (Flat/Incline/Decline)</Text>
+              <Switch value={hasAngles} onChange={setHasAngles} />
+            </View>
+          )}
           <View className="flex-row items-center justify-between">
             <Button label="Cancel" onPress={onClose} size="medium" />
             <Button
               label="Save"
-              onPress={() => name.trim() && fields.length > 0 && onSave(name.trim(), category, muscle.trim(), fields, setFormat)}
+              onPress={() =>
+                name.trim() &&
+                fields.length > 0 &&
+                onSave(name.trim(), category, muscle.trim(), fields, setFormat, hasAngles && !isCardio)
+              }
               disabled={!name.trim() || fields.length === 0}
               variant="solid"
               size="medium"

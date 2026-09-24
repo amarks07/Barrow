@@ -14,6 +14,14 @@ export const addDays = (key, delta) => {
   return toKey(new Date(y, m - 1, d + delta));
 };
 
+// Sunday of the week containing `key` — matches the widget week strip and
+// CalendarGrid's own Sunday-first WEEKDAYS order.
+export const startOfWeek = (key) => {
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return toKey(new Date(y, m - 1, d - date.getDay()));
+};
+
 export const shortDayLabel = (key) => {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

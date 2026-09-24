@@ -29,13 +29,20 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, routineRepRange, 
   const isSingle = ex.setFormat === "single";
   const lastSet = entry.sets[entry.sets.length - 1];
   const routineRange = routineRepRange(entry.exerciseId);
+  // getRepRange's history-derived range (and its made-up 8-12 fallback when
+  // there's no history either) both feed getRecommendation a sane rep
+  // ceiling/floor for the progression math below, but only a routine-defined
+  // range is an actual target worth showing the user as one.
   const { repLow, repHigh } = routineRange
     ? { repLow: routineRange.min, repHigh: routineRange.max }
     : getRepRange(entry.exerciseId, workouts, workoutId);
-  const rec = !isSingle && entry.sets.length === 0 ? getRecommendation(entry.exerciseId, workouts, unit, workoutId, repLow, repHigh) : null;
+  const hasTarget = !!routineRange;
+  // Suggested next weight/reps is progression math against a target range,
+  // so it's gated on the same routine-defined range as the Target line
+  // above rather than showing for every exercise with logged history.
+  const rec = !isSingle && entry.sets.length === 0 && hasTarget ? getRecommendation(entry.exerciseId, workouts, unit, workoutId, repLow, repHigh) : null;
   // First set of an entry is left blank rather than auto-filled from `rec`
-  // — see DayView's WorkoutEntryRow for the matching comment. `rec` still
-  // computed above for the "Last: ..." reference line.
+  // — see DayView's WorkoutEntryRow for the matching comment.
   const prefill = lastSet
     ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
     : null;
@@ -74,6 +81,12 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, routineRepRange, 
         />
       ) : (
         <>
+          {hasTarget && (
+            <Text style={{ fontSize: 11, color: tokens.textDim }} className={entry.sets.length === 0 && rec ? "mb-1" : "mb-3"}>
+              Target: {repLow}–{repHigh} reps
+            </Text>
+          )}
+
           {entry.sets.length === 0 && rec && (
             <Text style={{ fontSize: 11, color: tokens.textDim }} className="mb-3">
               Last: {fmtNum(rec.lastWeight)} {unit} × {fmtNum(rec.lastReps)} · {rec.note}
@@ -83,6 +96,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, routineRepRange, 
           {entry.sets.map((set) => (
             <SetCounters
               key={set.id}
+              fields={ex.fields}
               sets={entry.sets}
               set={set}
               unit={unit}

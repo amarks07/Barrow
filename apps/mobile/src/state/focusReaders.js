@@ -34,3 +34,10 @@ export async function readAccentColor(storage) {
   const raw = await storage.getItem("barrow:accentColor");
   return raw || DEFAULT_ACCENT;
 }
+
+// Gates the widget's Start/End workout controls the same way
+// WorkoutTimerControl/WorkoutTimerBadge gate their in-app equivalents.
+export async function readWorkoutTimerEnabled(storage) {
+  const raw = await storage.getItem("barrow:workoutTimerEnabled");
+  return raw ? JSON.parse(raw) : false;
+}

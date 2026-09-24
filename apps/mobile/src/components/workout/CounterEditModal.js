@@ -79,26 +79,32 @@ export function CounterEditModal({ title, label, value, onChangeValue, onInc, on
     return false;
   };
 
-  // Closes the sheet along with the keyboard when it's dismissed some way
-  // other than the explicit close button/backdrop tap — an iOS interactive
-  // swipe-down-to-dismiss, or an Android equivalent, which closes the
-  // keyboard without otherwise touching this component (the hardware back
-  // button is handled separately by the Modal's onRequestClose below).
-  // Listens for `keyboardWillHide` so the sheet starts sliding away the
-  // instant the keyboard's own hide animation begins, and reuses the
-  // event's own `duration` so the two finish together.
+  // Closes the sheet along with the keyboard whenever the keyboard is
+  // dismissed some way other than the explicit close button/backdrop tap
+  // (those call handleClose directly, setting closingRef below) — an iOS
+  // interactive swipe-down-to-dismiss, an Android equivalent, or a single
+  // Android hardware back press (which, with a keyboard open, closes only
+  // the keyboard and never reaches Modal's onRequestClose at all — so this
+  // is the only place that dismissal is observable). Listens for
+  // `keyboardWillHide` so the sheet starts sliding away the instant the
+  // keyboard's own hide animation begins, and reuses the event's own
+  // `duration` so the two finish together.
   //
-  // A `keyboardWillHide` also fires for reasons that have nothing to do
-  // with dismissing the sheet — tapping any Pressable inside it (the +/-
-  // buttons, PlateCalculatorBar's bar-weight toggle, ...) blurs the
-  // autoFocused Counter input the same way. Trying to tell those apart by
-  // having every such button flag "this hide is incidental" from onPressIn
-  // raced the keyboard event and lost as often as it won, since this
-  // library dispatches keyboard events on the UI thread ahead of the
-  // ordinary JS-thread Pressable callback. `onInteractive` sidesteps that
-  // race entirely: it only ever fires for actual drag frames of a keyboard
-  // dismiss gesture, never for a plain blur, so arming from it — rather
-  // than from every button that might cause a blur — can't lose the race.
+  // A `keyboardWillHide` also fires for reasons that have nothing to do with
+  // dismissing the sheet — tapping any Pressable inside it (the +/- buttons,
+  // PlateCalculatorBar's bar-weight toggle, ...) blurs the autoFocused
+  // Counter input the same way, and that should just refocus rather than
+  // close. `onInteractive` (armed only by an actual drag frame of a keyboard
+  // dismiss gesture, never a plain blur) reliably flags the swipe case. The
+  // back-press/incidental-blur cases can't be told apart that way (back has
+  // no gesture to hook), so they're told apart by `recentTouchRef` instead
+  // (see markTouch below): a capture-phase touch marker set at touch-down,
+  // before any Android blur-on-any-touch quirk or button callback runs, so
+  // it doesn't race the keyboard event the way flagging from each button's
+  // own onPressIn did. No recent in-sheet touch — as with a hardware back
+  // press, which has no associated touch at all — means this hide wasn't
+  // caused by tapping something in here, so it's a real dismiss and the
+  // sheet should close with it.
   const interactiveDismissRef = useRef(false);
   const markInteractiveDismiss = () => {
     interactiveDismissRef.current = true;
@@ -115,19 +121,25 @@ export function CounterEditModal({ title, label, value, onChangeValue, onInc, on
 
   useEffect(() => {
     const willHide = KeyboardEvents.addListener("keyboardWillHide", (e) => {
-      if (interactiveDismissRef.current) {
-        interactiveDismissRef.current = false;
-        handleClose(e.duration);
-      }
+      const isInteractive = interactiveDismissRef.current;
+      interactiveDismissRef.current = false;
+      if (closingRef.current) return;
+      const hadRecentTouch = Date.now() - recentTouchRef.current < RECENT_TOUCH_WINDOW_MS;
+      // A recent in-sheet touch with no interactive dismiss gesture means
+      // this hide is an incidental blur (a +/- tap, a toolbar chip, ...) —
+      // leave the keyboard closed but the sheet open; keyboardDidHide below
+      // will bring the keyboard back. Anything else (a real interactive
+      // swipe, or no in-sheet touch at all, e.g. a back press) closes it.
+      if (hadRecentTouch && !isInteractive) return;
+      handleClose(e.duration);
     });
     // Belt-and-suspenders for whatever native focus-loss Android decides to
     // trigger on its own — a tap that's neither an explicit close (X/
-    // backdrop, which set closingRef above) nor a real interactive dismiss
-    // (handled above) shouldn't be able to touch the keyboard at all, no
-    // matter what caused it. If the keyboard finishes hiding without either
-    // of those, and there was a touch somewhere in this sheet recently
-    // (ruling out a hardware back press, which has no associated touch and
-    // should be left alone to behave normally), just refocus.
+    // backdrop, which set closingRef above) nor a real dismiss (handled
+    // above, and which also sets closingRef via handleClose before this
+    // fires) shouldn't be able to touch the keyboard at all, no matter what
+    // caused it. If the keyboard finishes hiding without either of those,
+    // and there was a touch somewhere in this sheet recently, just refocus.
     const didHide = KeyboardEvents.addListener("keyboardDidHide", () => {
       const hadRecentTouch = Date.now() - recentTouchRef.current < RECENT_TOUCH_WINDOW_MS;
       if (!closingRef.current && hadRecentTouch) {

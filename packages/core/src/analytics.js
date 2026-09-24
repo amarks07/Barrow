@@ -18,6 +18,15 @@ export function getRepRange(exerciseId, workouts, excludeWorkoutId) {
   return { repLow, repHigh, fromHistory };
 }
 
+// Double-progression recommendation: within a rep range, you climb reps at
+// the same weight until every working set reaches the top of the range,
+// then add weight and drop back to the bottom of the range and repeat.
+// "Working sets" excludes warmups; the weight compared against the range is
+// the heaviest one actually trained last session (ignoring lighter
+// back-off/pyramid sets below it) — only sets done AT that top weight are
+// checked against repHigh, so a session with a heavy top set plus lighter
+// back-off sets is judged on the top set alone, same as most progressive-
+// overload programs define "did you hit the top of the range."
 export function getRecommendation(exerciseId, workouts, unit, excludeWorkoutId, repLow = 8, repHigh = 12) {
   const increment = unit === "kg" ? 2.5 : 5;
   const ordered = flattenWorkouts(workouts).filter(({ workout }) => workout.id !== excludeWorkoutId);
@@ -26,34 +35,106 @@ export function getRecommendation(exerciseId, workouts, unit, excludeWorkoutId, 
     const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
     if (!entry || entry.sets.length === 0) continue;
 
-    const firstSet = entry.sets[0];
-    const firstReps = parseFloat(firstSet.reps) || 0;
-    if (firstReps <= 0) continue;
-    const firstWeight = convertWeight(firstSet.weight, firstSet.unit || unit, unit);
-    const top = { weight: firstWeight === "" ? 0 : firstWeight, reps: firstReps };
+    const workingSets = entry.sets
+      .filter((s) => !s.warmup)
+      .map((s) => {
+        const wConv = convertWeight(s.weight, s.unit || unit, unit);
+        return { reps: parseFloat(s.reps) || 0, weight: wConv === "" ? 0 : wConv, side: s.side };
+      })
+      .filter((s) => s.reps > 0);
+    if (workingSets.length === 0) continue;
+
+    const topWeight = Math.max(...workingSets.map((s) => s.weight));
+    const setsAtTopWeight = workingSets.filter((s) => s.weight === topWeight);
+    // The limiting set: the fewest reps done at the top weight — every set
+    // at that weight has to clear repHigh before weight goes up, so this is
+    // the one still holding the exercise back.
+    const minRepsAtTopWeight = Math.min(...setsAtTopWeight.map((s) => s.reps));
+    const limitingSet = setsAtTopWeight.find((s) => s.reps === minRepsAtTopWeight);
 
     let recWeight, recReps, note;
-    if (top.reps >= repHigh) {
-      recWeight = roundHalf(top.weight + increment);
+    if (minRepsAtTopWeight >= repHigh) {
+      // Every set at the top weight already hit the top of the range — add
+      // weight and reset to the bottom of the range.
+      recWeight = roundHalf(topWeight + increment);
       recReps = repLow;
-      note = `+${fmtNum(increment)} ${unit} · reset reps`;
+      note = `+${fmtNum(increment)} ${unit} · reset to ${repLow} reps`;
     } else {
-      recWeight = top.weight;
-      recReps = Math.min(top.reps + 1, repHigh);
-      note = recReps > top.reps ? "+1 rep" : "hold steady";
+      // Not every set has reached the top of the range yet — hold the same
+      // (top) weight from last time and push the limiting set one rep
+      // further, never past the top of the range.
+      recWeight = topWeight;
+      recReps = Math.min(minRepsAtTopWeight + 1, repHigh);
+      note = recReps > minRepsAtTopWeight ? "+1 rep · same weight" : "hold steady";
     }
+
     return {
       basedOn: dateKey,
-      lastWeight: top.weight,
-      lastReps: top.reps,
+      lastWeight: topWeight,
+      lastReps: minRepsAtTopWeight,
       recWeight,
       recReps,
       note,
-      side: firstSet.side ?? "both",
-      warmup: firstSet.warmup ?? false,
+      side: limitingSet?.side ?? "together",
+      warmup: false,
     };
   }
   return null;
+}
+
+// Reference lines for the exercise-in-progress: the first-logged and
+// heaviest (max weight, ties broken by more reps) non-warmup set from the
+// most recent PRIOR session that logged this exercise (excludeWorkoutId
+// skips the current in-progress workout, same convention as
+// getRecommendation/getWeightPR).
+export function getPreviousSessionSets(exerciseId, workouts, unit, excludeWorkoutId) {
+  const ordered = flattenWorkouts(workouts).filter(({ workout }) => workout.id !== excludeWorkoutId);
+
+  for (const { dateKey, workout } of ordered) {
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
+    if (!entry || entry.sets.length === 0) continue;
+
+    const firstSet = entry.sets[0];
+    const firstWeight = convertWeight(firstSet.weight, firstSet.unit || unit, unit);
+    const first = { weight: firstWeight === "" ? 0 : firstWeight, reps: parseFloat(firstSet.reps) || 0 };
+
+    let max = null;
+    entry.sets.forEach((s) => {
+      if (s.warmup) return;
+      const reps = parseFloat(s.reps) || 0;
+      if (reps <= 0) return;
+      const wConv = convertWeight(s.weight, s.unit || unit, unit);
+      const wNum = wConv === "" ? 0 : wConv;
+      if (wNum <= 0) return;
+      if (!max || wNum > max.weight || (wNum === max.weight && reps > max.reps)) {
+        max = { weight: wNum, reps };
+      }
+    });
+
+    return { basedOn: dateKey, first, max };
+  }
+  return null;
+}
+
+// Every warmup set, in original order, from the most recent PRIOR session
+// that logged this exercise with at least one warmup set — for the Focus
+// view's "copy warmups" button. Empty array if there's no such session.
+export function getPreviousWarmupSets(exerciseId, workouts, unit, excludeWorkoutId) {
+  const ordered = flattenWorkouts(workouts).filter(({ workout }) => workout.id !== excludeWorkoutId);
+
+  for (const { workout } of ordered) {
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
+    if (!entry || !entry.sets.some((s) => s.warmup)) continue;
+    return entry.sets
+      .filter((s) => s.warmup)
+      .map((s) => ({
+        weight: convertWeight(s.weight, s.unit || unit, unit),
+        reps: s.reps,
+        side: s.side ?? "together",
+        warmup: true,
+      }));
+  }
+  return [];
 }
 
 // Total weight×reps for a given exercise on each day it was logged —
@@ -64,7 +145,7 @@ export function getVolumeSeries(exerciseId, workouts, unit) {
   const byDate = new Map();
   flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
     const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
-    if (!entry || entry.sets.length === 0) return;
+    if (!entry || entry.sets.length === 0 || entry.excluded) return;
     let volume = 0;
     entry.sets.forEach((s) => {
       if (s.warmup) return;
@@ -74,6 +155,123 @@ export function getVolumeSeries(exerciseId, workouts, unit) {
       volume += wNum * reps;
     });
     byDate.set(dateKey, (byDate.get(dateKey) || 0) + volume);
+  });
+  const rows = Array.from(byDate, ([dateKey, volume]) => ({ dateKey, volume }));
+  rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
+  return rows.slice(-10);
+}
+
+// Heaviest non-warmup set lifted for a given exercise on each day — an
+// alternative lens to total volume, since pushing max weight up doesn't
+// require also holding or growing reps. Same same-day-dedup/sort/slice
+// convention as getVolumeSeries.
+export function getMaxWeightSeries(exerciseId, workouts, unit) {
+  const byDate = new Map();
+  flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
+    if (!entry || entry.sets.length === 0 || entry.excluded) return;
+    let dayMax = 0;
+    entry.sets.forEach((s) => {
+      if (s.warmup) return;
+      const reps = parseFloat(s.reps) || 0;
+      if (reps <= 0) return;
+      const wConv = convertWeight(s.weight, s.unit, unit);
+      const wNum = wConv === "" ? 0 : wConv;
+      if (wNum > dayMax) dayMax = wNum;
+    });
+    if (dayMax <= 0) return;
+    byDate.set(dateKey, Math.max(byDate.get(dateKey) || 0, dayMax));
+  });
+  const rows = Array.from(byDate, ([dateKey, volume]) => ({ dateKey, volume }));
+  rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
+  return rows.slice(-10);
+}
+
+// Estimated one-rep max (Epley: weight × (1 + reps/30)) from the best
+// non-warmup set for a given exercise on each day — catches strength gains
+// that trade reps against weight session to session, which raw volume or
+// max weight alone can miss.
+export function getEstimatedOneRepMaxSeries(exerciseId, workouts, unit) {
+  const byDate = new Map();
+  flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
+    if (!entry || entry.sets.length === 0 || entry.excluded) return;
+    let dayBest = 0;
+    entry.sets.forEach((s) => {
+      if (s.warmup) return;
+      const reps = parseFloat(s.reps) || 0;
+      if (reps <= 0) return;
+      const wConv = convertWeight(s.weight, s.unit, unit);
+      const wNum = wConv === "" ? 0 : wConv;
+      if (wNum <= 0) return;
+      const oneRm = wNum * (1 + reps / 30);
+      if (oneRm > dayBest) dayBest = oneRm;
+    });
+    if (dayBest <= 0) return;
+    byDate.set(dateKey, Math.max(byDate.get(dateKey) || 0, dayBest));
+  });
+  const rows = Array.from(byDate, ([dateKey, volume]) => ({ dateKey, volume }));
+  rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
+  return rows.slice(-10);
+}
+
+// Total non-warmup reps performed for a given exercise on each day.
+export function getTotalRepsSeries(exerciseId, workouts) {
+  const byDate = new Map();
+  flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
+    if (!entry || entry.sets.length === 0 || entry.excluded) return;
+    let dayReps = 0;
+    entry.sets.forEach((s) => {
+      if (s.warmup) return;
+      dayReps += parseFloat(s.reps) || 0;
+    });
+    if (dayReps <= 0) return;
+    byDate.set(dateKey, (byDate.get(dateKey) || 0) + dayReps);
+  });
+  const rows = Array.from(byDate, ([dateKey, volume]) => ({ dateKey, volume }));
+  rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
+  return rows.slice(-10);
+}
+
+// Working (non-warmup) sets logged for a given exercise on each day —
+// tracks how much work capacity is being built independent of the weight or
+// reps used on any single set.
+export function getTotalSetsSeries(exerciseId, workouts) {
+  const byDate = new Map();
+  flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
+    if (!entry || entry.sets.length === 0 || entry.excluded) return;
+    const daySets = entry.sets.filter((s) => !s.warmup).length;
+    if (daySets <= 0) return;
+    byDate.set(dateKey, (byDate.get(dateKey) || 0) + daySets);
+  });
+  const rows = Array.from(byDate, ([dateKey, volume]) => ({ dateKey, volume }));
+  rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
+  return rows.slice(-10);
+}
+
+// Best single set's weight×reps for a given exercise on each day — distinct
+// from getVolumeSeries (which sums every set): this isolates the top
+// individual effort from a session, so it doesn't rise just because more
+// sets were added at a lighter weight.
+export function getBestSetVolumeSeries(exerciseId, workouts, unit) {
+  const byDate = new Map();
+  flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
+    const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
+    if (!entry || entry.sets.length === 0 || entry.excluded) return;
+    let dayBest = 0;
+    entry.sets.forEach((s) => {
+      if (s.warmup) return;
+      const reps = parseFloat(s.reps) || 0;
+      if (reps <= 0) return;
+      const wConv = convertWeight(s.weight, s.unit, unit);
+      const wNum = wConv === "" ? 0 : wConv;
+      const setVolume = wNum * reps;
+      if (setVolume > dayBest) dayBest = setVolume;
+    });
+    if (dayBest <= 0) return;
+    byDate.set(dateKey, Math.max(byDate.get(dateKey) || 0, dayBest));
   });
   const rows = Array.from(byDate, ([dateKey, volume]) => ({ dateKey, volume }));
   rows.sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1));
@@ -126,7 +324,7 @@ export function getCardioDistanceSeries(exerciseId, workouts, unit) {
   const byDate = new Map();
   flattenWorkouts(workouts).forEach(({ dateKey, workout }) => {
     const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
-    if (!entry || entry.sets.length === 0) return;
+    if (!entry || entry.sets.length === 0 || entry.excluded) return;
     let distance = 0;
     entry.sets.forEach((s) => {
       if (s.warmup) return;

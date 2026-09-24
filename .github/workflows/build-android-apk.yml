@@ -68,3 +68,23 @@ jobs:
               --title "Barrow Android v${{ steps.version.outputs.version }}" \
               --notes "Automated Android build from commit ${{ github.sha }}."
           fi
+
+      # Lets useAppVersionCheck.js (apps/mobile) prompt anyone on an older
+      # installed build to update, once this one's release is actually up.
+      # Uses the service_role key (bypasses the `app_config` table's RLS,
+      # which only grants clients read access) — requires a
+      # SUPABASE_SERVICE_ROLE_KEY repo secret (Settings > Secrets and
+      # variables > Actions), copied from the Supabase dashboard's Project
+      # Settings > API > service_role key. The project URL itself isn't
+      # secret — it's already embedded in the app bundle via
+      # EXPO_PUBLIC_SUPABASE_URL (see apps/mobile/eas.json).
+      - name: Update current app version in Supabase
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl -sf -X POST "https://sjbqvellgvxfwxlzwedr.supabase.co/rest/v1/app_config" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates" \
+            -d "{\"id\": true, \"mobile_version\": \"${{ steps.version.outputs.version }}\"}"

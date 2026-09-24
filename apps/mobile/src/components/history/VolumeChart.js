@@ -3,7 +3,8 @@ import Svg, { Circle, Line, Polyline, Text as SvgText } from "react-native-svg";
 import { fmtNum } from "@barrow/core";
 import { useTheme } from "../../theme/ThemeProvider";
 
-// Last 10 sessions of weight × reps (or cardio distance) for an exercise.
+// Last 10 sessions of a per-day metric (weight × reps, cardio distance,
+// etc.) for an exercise.
 export function VolumeChart({ data }) {
   const { tokens } = useTheme();
   const W = 320, H = 130, padX = 14, padTop = 22, padBottom = 20;

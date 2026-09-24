@@ -1,4 +1,4 @@
-const APK_VERSION = "1.3.1";
+const APK_VERSION = "1.4.0";
 
 export default function Page() {
   return (
@@ -74,6 +74,9 @@ export default function Page() {
           Android shows an unfamiliar-source warning during install. On iPhone, visiting this site
           opens the installable web app version directly.
         </p>
+        <a href="/app" className="mt-3 text-[12px] underline" style={{ color: "var(--text-dim)" }}>
+          Prefer the web app instead? Open it here.
+        </a>
       </div>
     </main>
   );

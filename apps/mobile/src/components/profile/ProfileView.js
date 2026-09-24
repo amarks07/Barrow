@@ -9,12 +9,14 @@ import { MenuRow } from "../ui/MenuRow";
 import { ProfileSettingsView } from "./ProfileSettingsView";
 import { BiometricsView } from "./BiometricsView";
 import { FriendsView } from "./FriendsView";
+import { NotificationsView } from "./NotificationsView";
 import { AccountSection } from "./AccountSection";
 import { CloudBackupSection } from "./CloudBackupSection";
 import { DangerZoneSection } from "./DangerZoneSection";
 import { PremiumPlaceholderModal } from "./PremiumPlaceholderModal";
 import { SignInModal } from "./SignInModal";
 import { EditableAvatar } from "./EditableAvatar";
+import { UpdateBanner } from "../appversion/UpdateBanner";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
 
@@ -27,10 +29,10 @@ import { FONT_DISPLAY } from "../../theme/fonts";
 // or not the user is signed in — CloudBackupSection's own signed-out state
 // carries the "Sign in/up" CTA in place of sync status, and opens
 // SignInModal (below) on tap.
-export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWorkoutData, onSignOutClear }) {
+export function ProfileView({ profile, onUpdate, onClose, cloudSync, notifications, appVersionCheck, initialPage, onClearWorkoutData, onSignOutClear }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const [page, setPage] = useState("hub"); // "hub" | "settings" | "biometrics" | "friends"
+  const [page, setPage] = useState(initialPage || "hub"); // "hub" | "settings" | "biometrics" | "friends" | "notifications"
   const [showSignIn, setShowSignIn] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
 
@@ -55,6 +57,9 @@ export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWork
   if (page === "friends") {
     return <FriendsView session={cloudSync.session} profile={profile} onBack={() => setPage("hub")} />;
   }
+  if (page === "notifications") {
+    return <NotificationsView notifications={notifications} onBack={() => setPage("hub")} onNavigate={setPage} />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.bg, paddingTop: insets.top }}>
@@ -67,6 +72,7 @@ export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWork
         </IconBtn>
         <Text style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: tokens.text }}>Profile</Text>
       </View>
+      {appVersionCheck && <UpdateBanner latestVersion={appVersionCheck.latestVersion} />}
       <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingTop: 20, paddingBottom: 24 + insets.bottom }}>
         <View className="items-center mb-6">
           <EditableAvatar profile={profile} onUpdate={onUpdate} cloudSync={cloudSync} />
@@ -78,6 +84,14 @@ export function ProfileView({ profile, onUpdate, onClose, cloudSync, onClearWork
         </View>
 
         <View style={{ gap: 10 }}>
+          {/* Ungated by session, like Biometrics below — missing-biometrics
+              notifications apply whether or not the user is signed in. */}
+          <MenuRow
+            label="Notifications"
+            subtitle="Friend requests, reminders, more"
+            badge={notifications.unreadCount > 0}
+            onPress={() => setPage("notifications")}
+          />
           {/* Name/username/email live on the cloud profile row (see schema.sql),
               which only exists once signed in — nothing to edit without a session. */}
           {cloudSync.session && (

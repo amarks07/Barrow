@@ -33,7 +33,7 @@ const KeyboardAvoidingRoutineDetail = withKeyboardAvoiding(RoutineDetailScreen);
 // triggers from the explicit "Unlock to sync" button inside that screen,
 // never from opening it.
 export function MainStack({ navigation }) {
-  const { profile, cloudSync } = useAppState();
+  const { profile, cloudSync, notifications } = useAppState();
   const { tokens } = useTheme();
 
   return (
@@ -41,6 +41,7 @@ export function MainStack({ navigation }) {
       <AppHeader
         profile={profile}
         signedIn={!!cloudSync.session}
+        unreadCount={notifications.unreadCount}
         onOpenProfile={() => navigation.navigate("Profile")}
         onOpenPreferences={() => navigation.navigate("Preferences")}
       />

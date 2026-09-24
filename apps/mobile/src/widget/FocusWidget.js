@@ -1,377 +1,59 @@
-import { FlexWidget, TextWidget, ListWidget } from "react-native-android-widget";
-import { buildFocusRows, FOCUS_SCROLL_PAGE_SIZE } from "@barrow/core";
 import { THEME_TOKENS } from "../theme/tokens";
 import { applyAccent } from "../theme/accentPalette";
+import { WeekStripScreen } from "./screens/WeekStripScreen";
+import { DayBrowseScreen } from "./screens/DayBrowseScreen";
+import { FocusExerciseScreen } from "./screens/FocusExerciseScreen";
 
-// Renders the Android home screen widget as native RemoteViews (via
-// react-native-android-widget's JSX-to-RemoteViews compiler) from a
-// packages/core focusStorage.readFocusSnapshot() result. Pure — the task
-// handler (focusWidgetTaskHandler.js) does all the reading/mutating and
-// just calls props.renderWidget(<FocusWidget snapshot={...} />).
+// Root of the Android home screen widget — routes to one of three screens
+// based on `state.screen` (from packages/core focusStorage.resolveWidgetState):
+// "week" (the default/home view — a 7-day strip), "day" (one date's
+// workouts, with Start/End controls), or "focus" (the existing per-set step
+// editor). focusWidgetTaskHandler.js and refreshFocusWidget.js are the only
+// two callers — both resolve the full state first, then just render it here.
 //
-// Every set row exposes its own reps/weight +/-, warmup toggle, and delete
-// tap targets (clickActionData carries the setId) rather than acting on one
-// implicit "active" set, since a resized widget can show every set on every
-// exercise in the current step, not just one.
-//
-// Colors come from `theme` (already resolved to "dark"/"light" — see
-// focusReaders.readTheme) rather than being hardcoded, so the widget always
-// matches whatever the app itself is showing. `tokens` is threaded through
-// as a plain prop rather than the app's ThemeProvider context, since this
-// tree is rendered headless (often with no app process at all) and each
-// render call needs its own tokens, not whatever a shared module-level
-// value happened to hold last.
-
-// Small gap at the bottom of the (scrolling) sets list, inside the
-// ListWidget's own children, so the last row doesn't sit flush against the
-// Add Set footer below it — see the spacer FlexWidget in FocusWidget.
-const LIST_BOTTOM_SPACER = 10;
-
-// RemoteViews (what this whole tree compiles down to) can't host a text
-// input — Android just doesn't support that on home-screen widgets, for any
-// app. Tapping a set's weight/reps value instead opens Barrow straight to
-// that field via an OPEN_URI click, which the native widget module turns
-// into a plain ACTION_VIEW intent (see RNWidgetProvider#openUri) — the same
-// "barrow://" scheme already registered for the app. useFocusWidgetDeepLink
-// (apps/mobile/src/hooks) parses it back out on the receiving end and
-// navigates to ExerciseFocusScreen with the keyboard ready.
-function buildFocusDeepLink({ dateKey, workoutId, exerciseId, setId, field }) {
-  const params = { dateKey, workoutId, exerciseId, setId, field };
-  const query = Object.entries(params)
-    .filter(([, v]) => v)
-    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-    .join("&");
-  return `barrow://focus?${query}`;
-}
-
-function NavButton({ label, disabled, clickAction, tokens }) {
-  return (
-    <FlexWidget
-      clickAction={disabled ? undefined : clickAction}
-      style={{
-        paddingHorizontal: 10,
-        height: 32,
-        backgroundColor: tokens.surface,
-        borderRadius: 16,
-        alignItems: "center",
-        justifyContent: "center",
-        marginLeft: 4,
-      }}
-    >
-      <TextWidget text={label} style={{ fontSize: 14, color: disabled ? tokens.textDim : tokens.text }} />
-    </FlexWidget>
-  );
-}
-
-// A real ListView backs ListWidget (see the library's ListWidget.java —
-// isCollection() true), but swiping it on an actual placed home-screen
-// widget is unreliable: the gesture competes with the launcher's own swipe
-// handling (page paging, swipe-up-to-open-drawer) and often loses, moving
-// the whole widget instead of scrolling the list — a known, unfixed
-// upstream limitation (sAleksovski/react-native-android-widget#78, #49).
-// These buttons page snapshot.scrollOffset (packages/core focusStorage.js
-// buildFocusRows/focusScrollSets) explicitly instead of depending on that
-// swipe ever landing.
-function ScrollButton({ label, disabled, clickAction, tokens }) {
-  return (
-    <FlexWidget
-      clickAction={disabled ? undefined : clickAction}
-      style={{
-        width: 32,
-        height: 32,
-        backgroundColor: tokens.surface,
-        borderRadius: 16,
-        alignItems: "center",
-        justifyContent: "center",
-        marginHorizontal: 4,
-      }}
-    >
-      <TextWidget text={label} style={{ fontSize: 15, color: disabled ? tokens.textDim : tokens.text }} />
-    </FlexWidget>
-  );
-}
-
-// Lives in its own footer row below the ListWidget (not floating over it —
-// this library renders a ListWidget as a real, separately-layered native
-// ListView that always sits above any clickable overlay placed over the same
-// screen area, swallowing the touch before it reaches it) so it stays fixed
-// at the bottom-right no matter how far the list is scrolled. Always acts on
-// the current step's primary exercise — same convention the notification's
-// 3-button cap already uses (see focusNotification.js) — rather than needing
-// per-exercise buttons for supersets.
-function AddSetButton({ clickActionData, tokens }) {
-  return (
-    <FlexWidget
-      clickAction="ADD_SET"
-      clickActionData={clickActionData}
-      style={{
-        paddingHorizontal: 14,
-        height: 40,
-        backgroundColor: tokens.accent,
-        borderRadius: 20,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <TextWidget text="+ Add set" style={{ fontSize: 16, fontWeight: "600", color: tokens.onAccent }} />
-    </FlexWidget>
-  );
-}
-
-function Stepper({ label, value, onMinus, onPlus, minusData, plusData, tapUri, tokens }) {
-  return (
-    <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
-      <FlexWidget
-        clickAction={onMinus}
-        clickActionData={minusData}
-        style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center", backgroundColor: tokens.surface, borderRadius: 15 }}
-      >
-        <TextWidget text="–" style={{ fontSize: 19, color: tokens.text }} />
-      </FlexWidget>
-      {/* Tapping the value itself (rather than +/-) opens the app to type
-          an exact number — see buildFocusDeepLink above. */}
-      <TextWidget
-        text={`${value}${label ? " " + label : ""}`}
-        clickAction={tapUri ? "OPEN_URI" : undefined}
-        clickActionData={tapUri ? { uri: tapUri } : undefined}
-        style={{ fontSize: 16, color: tokens.text, marginHorizontal: 6, width: 70, textAlign: "center" }}
-        truncate="END"
-      />
-      <FlexWidget
-        clickAction={onPlus}
-        clickActionData={plusData}
-        style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center", backgroundColor: tokens.surface, borderRadius: 15 }}
-      >
-        <TextWidget text="+" style={{ fontSize: 19, color: tokens.text }} />
-      </FlexWidget>
-    </FlexWidget>
-  );
-}
-
-function WarmupToggle({ set, tokens }) {
-  return (
-    <FlexWidget
-      clickAction="TOGGLE_WARMUP"
-      clickActionData={{ setId: set.id }}
-      accessibilityLabel={set.warmup ? "Unmark warmup set" : "Mark as warmup set"}
-      style={{
-        width: 24,
-        height: 24,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: set.warmup ? tokens.accent : tokens.surface,
-        borderRadius: 12,
-        marginRight: 4,
-      }}
-    >
-      <TextWidget text="W" style={{ fontSize: 13, fontWeight: "700", color: set.warmup ? tokens.onAccent : tokens.textDim }} />
-    </FlexWidget>
-  );
-}
-
-function SetRow({ set, unit, dateKey, workoutId, exerciseId, tokens }) {
-  const weightUri = buildFocusDeepLink({ dateKey, workoutId, exerciseId, setId: set.id, field: "weight" });
-  const repsUri = buildFocusDeepLink({ dateKey, workoutId, exerciseId, setId: set.id, field: "reps" });
-  return (
-    <FlexWidget
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingVertical: 6,
-        paddingHorizontal: 4,
-        borderBottomWidth: 1,
-        borderBottomColor: tokens.line,
-        width: "match_parent",
-      }}
-    >
-      <WarmupToggle set={set} tokens={tokens} />
-      <Stepper value={set.weight || "0"} label={set.unit || unit} onMinus="WEIGHT_MINUS" onPlus="WEIGHT_PLUS" minusData={{ setId: set.id }} plusData={{ setId: set.id }} tapUri={weightUri} tokens={tokens} />
-      <Stepper value={set.reps || "0"} label="reps" onMinus="REPS_MINUS" onPlus="REPS_PLUS" minusData={{ setId: set.id }} plusData={{ setId: set.id }} tapUri={repsUri} tokens={tokens} />
-      <FlexWidget
-        clickAction="REMOVE_SET"
-        clickActionData={{ setId: set.id }}
-        style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
-      >
-        <TextWidget text="✕" style={{ fontSize: 17, color: tokens.textDim }} />
-      </FlexWidget>
-    </FlexWidget>
-  );
-}
-
-// Renders one row out of buildFocusRows — the flat, sliceable unit
-// snapshot.scrollOffset windows into (see ScrollButton above). Each row
-// carries its own top padding (via firstOfEntry) rather than a shared
-// per-entry wrapper, since a superset's header can be scrolled out of the
-// visible window while its sets stay in it.
-function FocusRow({ row, entryMap, unit, dateKey, workoutId, tokens }) {
-  const entry = entryMap[row.exerciseId];
-  return (
-    <FlexWidget style={{ width: "match_parent", paddingTop: row.firstOfEntry ? 6 : 0 }}>
-      {row.type === "header" && (
-        <TextWidget text={entry.name} style={{ fontSize: 17, fontWeight: "600", color: tokens.text, marginBottom: 4 }} truncate="END" maxLines={1} />
-      )}
-      {row.type === "empty" && <TextWidget text="No sets yet" style={{ fontSize: 15, color: tokens.textDim, marginBottom: 4 }} />}
-      {row.type === "set" && (
-        <SetRow set={row.set} unit={unit} dateKey={dateKey} workoutId={workoutId} exerciseId={row.exerciseId} tokens={tokens} />
-      )}
-    </FlexWidget>
-  );
-}
-
-function RefreshButton({ tokens }) {
-  return (
-    <FlexWidget
-      clickAction="REFRESH_WIDGET"
-      accessibilityLabel="Refresh"
-      style={{
-        width: 40,
-        height: 40,
-        backgroundColor: tokens.surface,
-        borderRadius: 20,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <TextWidget text="⟳" style={{ fontSize: 22, color: tokens.text }} />
-    </FlexWidget>
-  );
-}
-
-function RefreshingIndicator({ tokens }) {
-  return (
-    <FlexWidget
-      style={{
-        height: 40,
-        paddingHorizontal: 12,
-        backgroundColor: tokens.surface,
-        borderRadius: 20,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <TextWidget text="Refreshing…" style={{ fontSize: 14, fontWeight: "600", color: tokens.text }} maxLines={1} />
-    </FlexWidget>
-  );
-}
-
-function RefreshSlot({ refreshing, tokens }) {
-  return refreshing ? <RefreshingIndicator tokens={tokens} /> : <RefreshButton tokens={tokens} />;
-}
-
-function EmptyState({ tokens, refreshing }) {
-  return (
-    <FlexWidget
-      clickAction="OPEN_APP"
-      style={{ width: "match_parent", height: "match_parent", backgroundColor: tokens.bg, padding: 16 }}
-    >
-      <FlexWidget style={{ width: "match_parent", alignItems: "center", paddingBottom: 10 }}>
-        <TextWidget text="Barrow" style={{ fontSize: 20, fontWeight: "600", color: tokens.text }} />
-      </FlexWidget>
-
-      {/* height: 0 + flex: 1, same trick as the sets list below — centers
-          the helper text in the remaining space under the title row. */}
-      <FlexWidget style={{ width: "match_parent", height: 0, flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <TextWidget
-          text="Open a workout in the app to manage a session in this widget."
-          style={{ fontSize: 16, color: tokens.textDim, textAlign: "center" }}
-          maxLines={3}
-        />
-      </FlexWidget>
-
-      {/* Refresh has to work from here too — this is the view a stale
-          widget gets stuck showing, so it can't depend on already being in
-          the (only reachable from) workout view to escape a bad read. Its
-          own clickAction claims its bounds before the root's OPEN_APP does,
-          same as the title/nav buttons layered over the root in the
-          workout view below. */}
-      <FlexWidget style={{ width: "match_parent", flexDirection: "row", justifyContent: "flex-start", paddingTop: 10 }}>
-        <RefreshSlot refreshing={refreshing} tokens={tokens} />
-      </FlexWidget>
-    </FlexWidget>
-  );
-}
-
-export function FocusWidget({ snapshot, unit, theme, accentColor, refreshing }) {
+// Tokens are resolved once here (rather than by each screen) from `theme`/
+// `accentColor`, already plain props rather than the app's ThemeProvider
+// context, since this tree is rendered headless (often with no app process
+// at all) and each render call needs its own tokens, not whatever a shared
+// module-level value happened to hold last.
+export function FocusWidget({ state, unit, theme, accentColor, workoutTimerEnabled, refreshing }) {
   const tokens = applyAccent(THEME_TOKENS[theme] ?? THEME_TOKENS.dark, accentColor);
 
-  if (!snapshot) return <EmptyState tokens={tokens} refreshing={refreshing} />;
+  if (state.screen === "day") {
+    return (
+      <DayBrowseScreen
+        dateKey={state.dateKey}
+        workouts={state.workouts}
+        resumable={state.resumable}
+        confirmingEnd={state.confirmingEnd}
+        refreshing={refreshing}
+        workoutTimerEnabled={workoutTimerEnabled}
+        tokens={tokens}
+      />
+    );
+  }
 
-  const primaryEntry = snapshot.entries[0];
-  const entryMap = Object.fromEntries(snapshot.entries.map((entry) => [entry.exerciseId, entry]));
-  const rows = buildFocusRows(snapshot.entries, snapshot.isSuperset);
-  const visibleRows = rows.slice(snapshot.scrollOffset, snapshot.scrollOffset + FOCUS_SCROLL_PAGE_SIZE);
+  if (state.screen === "focus") {
+    return (
+      <FocusExerciseScreen
+        snapshot={state.snapshot}
+        unit={unit}
+        workoutTimerEnabled={workoutTimerEnabled}
+        workoutTimerStartedAt={state.workoutTimerStartedAt}
+        confirmingEnd={state.confirmingEnd}
+        refreshing={refreshing}
+        tokens={tokens}
+      />
+    );
+  }
 
   return (
-    <FlexWidget style={{ width: "match_parent", height: "match_parent", backgroundColor: tokens.bg, padding: 16 }}>
-      {/* Left/right columns both start from a 0-width base with equal flex
-          weight, so they split the row's leftover space exactly evenly —
-          that's what puts the counter at the true horizontal center
-          regardless of title or button width, not just "space-between". */}
-      <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", paddingBottom: 10 }}>
-        <FlexWidget style={{ width: 0, flex: 1 }}>
-          <TextWidget
-            text={snapshot.title}
-            clickAction="OPEN_APP"
-            style={{ fontSize: 19, fontWeight: "600", color: tokens.text }}
-            truncate="END"
-            maxLines={1}
-          />
-        </FlexWidget>
-
-        <TextWidget
-          text={`${snapshot.stepIndex + 1}/${snapshot.stepCount}`}
-          style={{ fontSize: 15, color: tokens.accent }}
-        />
-
-        <FlexWidget style={{ width: 0, flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
-          <NavButton label="Previous" disabled={snapshot.stepIndex === 0} clickAction="PREV_STEP" tokens={tokens} />
-          <NavButton label="Next" disabled={snapshot.stepIndex === snapshot.stepCount - 1} clickAction="NEXT_STEP" tokens={tokens} />
-        </FlexWidget>
-      </FlexWidget>
-
-      {/* height: 0 + flex: 1 (not height: "match_parent") is what actually
-          reserves space correctly for the footer below — a match_parent
-          middle child measures itself against the FULL remaining height
-          with no notion of trailing siblings, pushing the footer past the
-          widget's bottom edge where it's clipped and invisible. */}
-      <FlexWidget style={{ width: "match_parent", height: 0, flex: 1 }}>
-        <ListWidget style={{ width: "match_parent", height: "match_parent" }}>
-          {visibleRows.map((row, i) => (
-            <FocusRow
-              key={row.type === "set" ? row.set.id : `${row.exerciseId}-${row.type}-${i}`}
-              row={row}
-              entryMap={entryMap}
-              unit={unit}
-              dateKey={snapshot.dateKey}
-              workoutId={snapshot.workoutId}
-              tokens={tokens}
-            />
-          ))}
-          <FlexWidget style={{ width: "match_parent", height: LIST_BOTTOM_SPACER }} />
-        </ListWidget>
-      </FlexWidget>
-
-      {/* Same equal-flex-weight centering trick as the header row above —
-          keeps the scroll buttons dead center regardless of the Refresh/Add
-          Set buttons' widths, rather than "space-between" which would only
-          center them by coincidence. */}
-      <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", paddingTop: 10 }}>
-        <FlexWidget style={{ width: 0, flex: 1 }}>
-          <RefreshSlot refreshing={refreshing} tokens={tokens} />
-        </FlexWidget>
-
-        {rows.length > 1 && (
-          <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
-            <ScrollButton label="▲" disabled={snapshot.scrollOffset === 0} clickAction="SCROLL_UP" tokens={tokens} />
-            <ScrollButton label="▼" disabled={snapshot.scrollOffset >= rows.length - 1} clickAction="SCROLL_DOWN" tokens={tokens} />
-          </FlexWidget>
-        )}
-
-        <FlexWidget style={{ width: 0, flex: 1, alignItems: "flex-end" }}>
-          <AddSetButton clickActionData={{ exerciseId: primaryEntry?.exerciseId || "" }} tokens={tokens} />
-        </FlexWidget>
-      </FlexWidget>
-    </FlexWidget>
+    <WeekStripScreen
+      weekCursor={state.weekCursor}
+      days={state.days}
+      resumable={state.resumable}
+      refreshing={refreshing}
+      tokens={tokens}
+    />
   );
 }

@@ -113,7 +113,7 @@ export function PreferencesView({
   accentColor, onAccentColorChange,
   workoutView, onWorkoutViewChange,
   focusSupersetGrouping, onFocusSupersetGroupingChange,
-  focusNotificationEnabled, onFocusNotificationToggle,
+  notificationsEnabled, onNotificationsToggle,
   plateCalculatorEnabled, onPlateCalculatorEnabledChange,
   stretchRoutinesEnabled, onStretchRoutinesEnabledChange,
   workoutTimerEnabled, onWorkoutTimerEnabledChange,
@@ -129,7 +129,7 @@ export function PreferencesView({
   const [plateCalculatorPulse, triggerPlateCalculatorPulse] = usePulse();
   const [stretchRoutinesPulse, triggerStretchRoutinesPulse] = usePulse();
   const [workoutTimerPulse, triggerWorkoutTimerPulse] = usePulse();
-  const [focusNotificationPulse, triggerFocusNotificationPulse] = usePulse();
+  const [notificationsPulse, triggerNotificationsPulse] = usePulse();
 
   if (showPatchNotes) {
     return <PatchNotesView onBack={() => setShowPatchNotes(false)} />;
@@ -361,28 +361,26 @@ export function PreferencesView({
             </Card>
 
             {Platform.OS !== "web" && (
-              <Card style={{ padding: 12 }} pulse={focusNotificationPulse}>
+              <Card style={{ padding: 12 }} pulse={notificationsPulse}>
                 <Pressable
                   onPress={() => {
-                    triggerFocusNotificationPulse();
-                    onFocusNotificationToggle(focusNotificationEnabled === "on" ? "off" : "on");
+                    triggerNotificationsPulse();
+                    onNotificationsToggle(notificationsEnabled === "on" ? "off" : "on");
                   }}
                   className="flex-row items-center gap-3"
                 >
                   <View className="flex-1">
-                    <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>Show workout notification</Text>
+                    <Text style={{ fontSize: 14, fontWeight: "500", color: tokens.text }}>Allow notifications</Text>
                     <Text style={{ fontSize: 11, color: tokens.textDim, marginTop: 2, lineHeight: 16 }}>
-                      Shows a persistent notification with the workout open in Focus flow — navigate exercises,
-                      adjust reps/weight, and add or remove sets right from it. If it doesn't appear, allow
-                      notifications for Barrow in your device settings. The Barrow home screen widget is
-                      available separately, any time you add it, regardless of this setting.
+                      Lets Barrow show notifications, such as friend requests. If it doesn't turn on, allow
+                      notifications for Barrow in your device settings.
                     </Text>
                   </View>
                   <Switch
-                    value={focusNotificationEnabled === "on"}
+                    value={notificationsEnabled === "on"}
                     onChange={(next) => {
-                      triggerFocusNotificationPulse();
-                      onFocusNotificationToggle(next ? "on" : "off");
+                      triggerNotificationsPulse();
+                      onNotificationsToggle(next ? "on" : "off");
                     }}
                   />
                 </Pressable>

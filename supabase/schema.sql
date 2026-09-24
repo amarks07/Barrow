@@ -495,6 +495,268 @@ $$;
 revoke all on function public.list_friendships() from public;
 grant execute on function public.list_friendships() to authenticated;
 
+-- One Expo push token per profile — last device to register wins, since
+-- nothing else in this schema models multiple devices per account. Written
+-- by the client (usePushToken.js) right after requesting notification
+-- permission, and cleared on sign-out so a device that just signed out of
+-- an account stops receiving pushes meant for it. Covered by the existing
+-- profiles_update_own policy — no new RLS needed.
+alter table public.profiles add column if not exists push_token text;
+
+-- One row per thing the notifications list/badge shows that isn't purely
+-- local (missing-biometrics is computed client-side from `profiles` itself
+-- and never gets a row here — see getMissingProfileFields in
+-- useProfileOnboarding.js). `type` is open-ended so a future notification
+-- kind (e.g. a workout reminder from a friend) reuses this table without a
+-- migration; `data` carries whatever that type needs to render/act on
+-- itself (a friend-request notification carries `requester_id`, resolved
+-- back to a display name/picture by list_notifications below since
+-- profiles' own select-own-only RLS blocks reading it directly).
+-- Example row (as notify_friendship below writes it — the only current
+-- writer of this table):
+--   {
+--     "id": "3f9c1a2e-6b4d-4e2a-9f1b-7d8c5a0e1234",
+--     "user_id": "b2a1c3d4-5e6f-7890-abcd-ef1234567890",  -- the recipient
+--     "type": "friend_request",                            -- or "friend_added"
+--     "data": { "requester_id": "1a2b3c4d-5e6f-7890-abcd-ef0987654321" },
+--     "read": false,
+--     "dismissed": false,
+--     "created_at": "2026-09-09T14:32:07.123456+00:00"
+--   }
+-- `data`'s shape is entirely type-dependent (see the comment above this
+-- table) — both current types carry just `requester_id`, resolved back to
+-- a display name/picture by list_notifications below.
+--
+-- `message` is the one type meant to be authored directly in the SQL
+-- editor (there's no insert policy for authenticated clients — see
+-- notifications_update_own below — so only the SQL editor's postgres role,
+-- or a security-definer function like notify_friendship, can ever insert a
+-- row here), for sending an arbitrary one-off note to a single user's
+-- notifications list. `data.header`/`data.body` are freeform text rendered
+-- as-is by NotificationsView (no markdown, unlike announcements.message):
+--   {
+--     "id": "9d4e2b1a-8c7f-4a3d-b6e5-0f1a2b3c4d5e",
+--     "user_id": "b2a1c3d4-5e6f-7890-abcd-ef1234567890",
+--     "type": "message",
+--     "data": { "header": "Heads up", "body": "We rolled back last night's release — no action needed." },
+--     "read": false,
+--     "dismissed": false,
+--     "urgent": false,
+--     "created_at": "2026-09-09T14:32:07.123456+00:00"
+--   }
+-- Set `urgent` to true (see the column below) to also pop this up as a
+-- blocking modal the next time the recipient opens the app, instead of only
+-- appearing unread in their notifications list.
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  type text not null,
+  data jsonb not null default '{}'::jsonb,
+  read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+-- A dismissed notification (the Notifications screen's swipe/delete-button
+-- dismiss) is a soft delete: kept as a row, just excluded from
+-- list_notifications below, rather than actually deleted. Recording the
+-- interaction instead of erasing the row keeps it available for anything
+-- that later wants to know a user saw and cleared a given notification.
+alter table public.notifications add column if not exists dismissed boolean not null default false;
+
+-- Flags a row to also show as a blocking modal (see UrgentNotificationModal
+-- in the app) the next time the recipient opens the app, in addition to its
+-- normal place in the notifications list — for anything the admin needs a
+-- user to actually see, not just eventually notice unread on the badge.
+-- Type-agnostic (any row can be urgent, not just `message`), set directly in
+-- the SQL editor same as the row itself. Closing that modal marks the row
+-- read, same effect as opening the Notifications list would have, so it
+-- doesn't reopen on the next launch — but it isn't dismissed, so it still
+-- shows in the list like any other read notification.
+alter table public.notifications add column if not exists urgent boolean not null default false;
+
+create index if not exists notifications_user_id_created_at_idx
+  on public.notifications (user_id, created_at desc);
+
+alter table public.notifications enable row level security;
+
+drop policy if exists "notifications_select_own" on public.notifications;
+create policy "notifications_select_own" on public.notifications
+  for select using (auth.uid() = user_id);
+
+-- Marking read/dismissing is a plain client-side update (no RPC needed) —
+-- same treatment as friendships_update_recipient for accepting a request.
+-- No insert policy: rows are only ever written by notify_friendship below,
+-- a security definer trigger function (same pattern as handle_new_user
+-- writing profiles), never directly by a client.
+drop policy if exists "notifications_update_own" on public.notifications;
+create policy "notifications_update_own" on public.notifications
+  for update using (auth.uid() = user_id);
+
+-- Lets notify_friendship below send a push via Expo's push API
+-- (https://exp.host/--/api/v2/push/send) directly from a trigger, queued
+-- and executed asynchronously in the background — no separate Edge
+-- Function or Dashboard webhook needed for this.
+create extension if not exists pg_net;
+
+-- Fires on every new friendship row (both the search-based pending request
+-- and the QR-instant-accept path — see send_friend_request/
+-- add_friend_by_public_id above) and notifies the recipient: one row in
+-- notifications (for the in-app list/badge) plus, if they've registered a
+-- push token, an OS push via Expo so it arrives even with the app closed.
+-- Deliberately only handles INSERT — the rare case where
+-- add_friend_by_public_id's ON CONFLICT flips an *existing* pending row
+-- straight to accepted is an UPDATE, not an INSERT, and is left uncovered
+-- to keep this simple.
+create or replace function public.notify_friendship()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  notif_type text;
+  requester_name text;
+  recipient_token text;
+begin
+  notif_type := case when new.status = 'pending' then 'friend_request' else 'friend_added' end;
+
+  insert into public.notifications (user_id, type, data)
+  values (new.recipient_id, notif_type, jsonb_build_object('requester_id', new.requester_id));
+
+  select coalesce(nullif(trim(p.first_name || ' ' || p.last_name), ''), p.username, 'Someone'),
+         r.push_token
+  into requester_name, recipient_token
+  from public.profiles p, public.profiles r
+  where p.id = new.requester_id and r.id = new.recipient_id;
+
+  if recipient_token is not null and recipient_token <> '' then
+    perform net.http_post(
+      url := 'https://exp.host/--/api/v2/push/send',
+      headers := '{"Content-Type": "application/json"}'::jsonb,
+      body := jsonb_build_object(
+        'to', recipient_token,
+        'title', 'Barrow',
+        'body', requester_name || case when notif_type = 'friend_request' then ' sent you a friend request' else ' added you as a friend' end,
+        'data', jsonb_build_object('type', notif_type, 'requesterId', new.requester_id)
+      )
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_friendship_created on public.friendships;
+create trigger on_friendship_created
+  after insert on public.friendships
+  for each row execute procedure public.notify_friendship();
+
+-- Everything the Notifications screen needs in one call: every
+-- not-yet-dismissed notification row for the caller, left-joined to the
+-- *other* party's public profile fields when `data` carries a requester_id
+-- (blocked otherwise by profiles' select-own-only RLS) — left join rather
+-- than inner so a future notification type without a requester_id still
+-- comes back.
+--
+-- Explicit drop first: `create or replace` can't change a function's
+-- return type, and adding the `urgent` out-column below counts as one.
+drop function if exists public.list_notifications();
+create or replace function public.list_notifications()
+returns table (
+  id uuid,
+  type text,
+  data jsonb,
+  read boolean,
+  urgent boolean,
+  created_at timestamptz,
+  actor_id uuid,
+  actor_public_id text,
+  actor_username text,
+  actor_first_name text,
+  actor_last_name text,
+  actor_picture_url text
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    n.id,
+    n.type,
+    n.data,
+    n.read,
+    n.urgent,
+    n.created_at,
+    p.id,
+    p.public_id,
+    p.username,
+    p.first_name,
+    p.last_name,
+    p.picture_url
+  from public.notifications n
+  left join public.profiles p on p.id = (n.data->>'requester_id')::uuid
+  where n.user_id = auth.uid() and not n.dismissed
+  order by n.created_at desc;
+$$;
+
+revoke all on function public.list_notifications() from public;
+grant execute on function public.list_notifications() to authenticated;
+
+-- Admin-authored messages shown to every user on app open (see
+-- useAnnouncement.js/AnnouncementModal.js) — a lightweight one-way broadcast
+-- channel, distinct from the per-user `notifications` table above. Rows are
+-- written directly in the SQL editor (flip `published` to true once ready),
+-- never by the client — the select policy below is the only thing a normal
+-- request can do to this table. `message` supports a small markdown subset
+-- (**bold**, *italic*, blank-line-separated paragraphs — see parseInline in
+-- AnnouncementModal.js). `continue_action` is a URL opened via Linking when
+-- the continue button is tapped; leave it blank to make continue behave the
+-- same as cancel (just close the modal).
+create table if not exists public.announcements (
+  id uuid primary key default gen_random_uuid(),
+  message text not null,
+  cancel_label text not null default 'Dismiss',
+  continue_label text not null default 'Continue',
+  continue_action text not null default '',
+  published boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table public.announcements enable row level security;
+
+-- Only published rows are ever readable — a draft still being written in
+-- the SQL editor never briefly appears to real users, only once `published`
+-- is deliberately flipped to true. No insert/update/delete policy: those
+-- only ever happen from the SQL editor (as postgres, which bypasses RLS),
+-- never from the app itself.
+drop policy if exists "announcements_select_published" on public.announcements;
+create policy "announcements_select_published" on public.announcements
+  for select using (published);
+
+-- Single-row table holding the app version currently shipping — written by
+-- the GitHub Actions release pipeline (see
+-- .github/workflows/build-android-apk.yml) with the service_role key right
+-- after a build's GitHub Release is published, and read by
+-- useAppVersionCheck.js to prompt anyone running an older installed build
+-- to update. The `id boolean` + check trick caps this at exactly one row:
+-- `id` can only ever be `true`, and it's the primary key, so a second
+-- insert collides with the first instead of appending.
+create table if not exists public.app_config (
+  id boolean primary key default true,
+  mobile_version text not null default '',
+  constraint app_config_singleton check (id)
+);
+
+insert into public.app_config (id, mobile_version) values (true, '')
+  on conflict (id) do nothing;
+
+alter table public.app_config enable row level security;
+
+drop policy if exists "app_config_select_all" on public.app_config;
+create policy "app_config_select_all" on public.app_config
+  for select using (true);
+
 -- Backfill email for any profile rows created before this column existed.
 update public.profiles p
 set email = u.email

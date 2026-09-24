@@ -5,7 +5,6 @@ import { ExerciseFocusView } from "../../components/workout/ExerciseFocusView";
 import { asyncStorageAdapter } from "../../state/storage";
 import { namespacedKey } from "../../state/accountNamespace";
 import { refreshFocusWidget } from "../../widget/refreshFocusWidget";
-import { refreshFocusNotification } from "../../notification/focusNotification";
 
 const FOCUS_POINTER_KEY = "barrow:focusPointer";
 const POINTER_SAVE_DEBOUNCE_MS = 400;
@@ -13,8 +12,8 @@ const POINTER_SAVE_DEBOUNCE_MS = 400;
 export function ExerciseFocusScreen({ route, navigation }) {
   const { dateKey, workoutId, exerciseId, focusSetId, focusField } = route.params;
   const {
-    exercises, routines, unit, workouts, setWorkouts, nextId, focusSupersetGrouping, focusNotificationEnabled,
-    plateCalculatorEnabled, activeAccountId,
+    exercises, routines, unit, workouts, setWorkouts, nextId, focusSupersetGrouping,
+    plateCalculatorEnabled, activeAccountId, exerciseNotes, exerciseActions,
   } = useAppState();
 
   const workoutActions = useWorkoutActions({
@@ -54,9 +53,6 @@ export function ExerciseFocusScreen({ route, navigation }) {
       .setItem(namespacedKey(FOCUS_POINTER_KEY, activeAccountIdRef.current), JSON.stringify(pointer))
       .then(() => {
         refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
-        if (focusNotificationEnabled === "on") {
-          refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
-        }
       })
       .catch((e) => console.error("Barrow: failed to save barrow:focusPointer", e));
   };
@@ -124,6 +120,8 @@ export function ExerciseFocusScreen({ route, navigation }) {
       groupSupersets={focusSupersetGrouping !== "separate"}
       focusSetId={focusSetId}
       focusField={focusField}
+      exerciseNotes={exerciseNotes}
+      onChangeExerciseNote={(exerciseId, note) => exerciseActions.setExerciseNote(exerciseId, note)}
     />
   );
 }

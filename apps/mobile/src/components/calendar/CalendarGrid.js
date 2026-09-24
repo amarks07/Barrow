@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
-import { buildMonthGrid, monthLabel, toKey } from "@barrow/core";
+import { buildMonthGrid, dayStatusDots, monthLabel, toKey } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { useTheme } from "../../theme/ThemeProvider";
 import { FONT_DISPLAY } from "../../theme/fonts";
@@ -68,11 +68,7 @@ export function CalendarGrid({ monthCursor, setMonthCursor, workouts, onSelectDa
               // matches the workout count: accent for a workout with
               // logged sets, text-color for one with exercises added but
               // no sets yet, and dim for one with no exercises at all.
-              const dots = dayWorkouts.map((w) => {
-                if (w.entries.some((e) => e.sets.length > 0)) return "done";
-                if (w.entries.length > 0) return "empty";
-                return "new";
-              });
+              const dots = dayStatusDots(dayWorkouts);
               const isToday = key === todayKey;
               return (
                 // The whole cell is the tap target now, not just the
@@ -85,7 +81,7 @@ export function CalendarGrid({ monthCursor, setMonthCursor, workouts, onSelectDa
                   key={di}
                   onPress={() => onSelectDay(key)}
                   android_ripple={{ color: "rgba(255,255,255,0.15)" }}
-                  style={{ width: cellSize, height: cellSize, alignItems: "center", justifyContent: "center", gap: 4 }}
+                  style={{ width: cellSize, height: cellSize, alignItems: "center", justifyContent: "center", gap: 8 }}
                 >
                   <View
                     style={{

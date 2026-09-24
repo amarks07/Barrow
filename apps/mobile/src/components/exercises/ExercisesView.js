@@ -87,8 +87,8 @@ export function ExercisesView({ exercises, exerciseView, setExerciseView, onOpen
       {showAdd && (
         <AddCustomExerciseModal
           onClose={() => setShowAdd(false)}
-          onSave={(name, category, muscle, fields, setFormat) => {
-            onAddCustom(name, category, muscle, fields, setFormat);
+          onSave={(name, category, muscle, fields, setFormat, hasAngles) => {
+            onAddCustom(name, category, muscle, fields, setFormat, hasAngles);
             setShowAdd(false);
           }}
         />

@@ -14,8 +14,9 @@ import { asyncStorageAdapter } from "./storage";
 import { getActiveAccountId, setActiveAccountId, namespacedKey, clearAccountData } from "./accountNamespace";
 import { DEFAULT_ACCENT } from "../theme/accentPalette";
 import { useCloudSync } from "../hooks/useCloudSync";
+import { useNotifications } from "../hooks/useNotifications";
+import { useAppVersionCheck } from "../hooks/useAppVersionCheck";
 import { refreshFocusWidget } from "../widget/refreshFocusWidget";
-import { refreshFocusNotification, cancelFocusNotification } from "../notification/focusNotification";
 import { clearStaleFocusPointer } from "./staleFocusPointer";
 
 const AppStateContext = createContext(null);
@@ -70,6 +71,23 @@ export function AppStateProvider({ children }) {
   const k = (name) => namespacedKey(name, activeAccountId);
 
   const [exercises, setExercises, exercisesHydrated] = usePersistedState(k("barrow:exercises"), SEED_EXERCISES, EXERCISES_CODEC);
+  // Per-exercise notes (form cues, reminders), keyed by exercise id — kept
+  // separate from `exercises` itself since built-in exercises are rebuilt
+  // fresh from SEED_EXERCISES on every load (see EXERCISES_CODEC above) and
+  // would lose any note stored directly on the exercise object.
+  const [exerciseNotes, setExerciseNotes, exerciseNotesHydrated] = usePersistedState(k("barrow:exerciseNotes"), {}, JSON_CODEC);
+  // Per-built-in-exercise fields/setFormat overrides (from editing a preset
+  // exercise's tracked metrics), keyed by exercise id — kept separate from
+  // `exercises` for the same reason exerciseNotes is: built-in exercises are
+  // rebuilt fresh from SEED_EXERCISES on every load (see EXERCISES_CODEC
+  // above), which would silently discard an edit stored directly on one.
+  // Custom exercises don't need this — their fields are edited in place
+  // (see updateExerciseFields) since they're never reconciled away.
+  const [exerciseFieldOverrides, setExerciseFieldOverrides, exerciseFieldOverridesHydrated] = usePersistedState(
+    k("barrow:exerciseFieldOverrides"),
+    {},
+    JSON_CODEC
+  );
   const [routines, setRoutines, routinesHydrated] = usePersistedState(k("barrow:routines"), [], {
     ...JSON_CODEC,
     // Only meaningful for the guest bucket — an account namespace never had
@@ -88,8 +106,12 @@ export function AppStateProvider({ children }) {
   );
   const [profile, setProfile, profileHydrated] = usePersistedState(k("barrow:profile"), DEFAULT_PROFILE, JSON_CODEC);
   const updateProfile = (field, value) => setProfile((p) => ({ ...p, [field]: value }));
-  const [focusNotificationEnabled, setFocusNotificationEnabled, focusNotificationEnabledHydrated] = usePersistedState(
-    k("barrow:focusNotificationEnabled"),
+  // Whether the user has opted in to notifications at all (push, and any
+  // future local notification features) — gates the OS permission request
+  // and push-token registration in usePushToken, rather than requesting
+  // permission unconditionally as soon as someone signs in.
+  const [notificationsEnabled, setNotificationsEnabled, notificationsEnabledHydrated] = usePersistedState(
+    k("barrow:notificationsEnabled"),
     "off",
     RAW_CODEC
   );
@@ -172,6 +194,8 @@ export function AppStateProvider({ children }) {
   // catching them mid-reload for a namespace that just changed.
   const localDataHydrated =
     exercisesHydrated &&
+    exerciseNotesHydrated &&
+    exerciseFieldOverridesHydrated &&
     routinesHydrated &&
     workoutsHydrated &&
     unitHydrated &&
@@ -180,7 +204,7 @@ export function AppStateProvider({ children }) {
     workoutViewHydrated &&
     focusSupersetGroupingHydrated &&
     profileHydrated &&
-    focusNotificationEnabledHydrated &&
+    notificationsEnabledHydrated &&
     plateCalculatorEnabledHydrated &&
     stretchRoutinesEnabledHydrated &&
     workoutTimerEnabledHydrated &&
@@ -217,17 +241,8 @@ export function AppStateProvider({ children }) {
   // Also the "relaunched after being killed" half of the stale-focusPointer
   // guard (see clearStaleFocusPointer) — a foreground transition is exactly
   // when a kill-then-relaunch would surface. Read through a ref rather than
-  // closing over focusNotificationEnabled directly, since this effect (like
-  // the resync above) subscribes once on mount and would otherwise always
-  // see whatever that preference was at that first render.
-  const focusNotificationEnabledRef = useRef(focusNotificationEnabled);
-  useEffect(() => {
-    focusNotificationEnabledRef.current = focusNotificationEnabled;
-  }, [focusNotificationEnabled]);
-
-  // Same "read through a ref, not a closure" reasoning as
-  // focusNotificationEnabledRef above — this effect also subscribes once on
-  // mount, so without a ref it would always resync/clear against whichever
+  // closing over activeAccountId directly, since this effect subscribes
+  // once on mount and would otherwise always resync/clear against whichever
   // namespace was active at that first render, even after switchActiveAccount
   // moves to a different one later.
   const activeAccountIdRef = useRef(activeAccountId);
@@ -244,7 +259,7 @@ export function AppStateProvider({ children }) {
       } catch (e) {
         console.error("Barrow: failed to resync barrow:workouts on foreground", e);
       }
-      clearStaleFocusPointer(focusNotificationEnabledRef.current, activeAccountIdRef.current).catch((e) =>
+      clearStaleFocusPointer(activeAccountIdRef.current).catch((e) =>
         console.error("Barrow: failed to clear stale barrow:focusPointer", e)
       );
     });
@@ -252,31 +267,30 @@ export function AppStateProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Tells Android to redraw the widget/notification right after an in-app
-  // edit instead of waiting on the OS's own throttled update cycle —
-  // debounced alongside usePersistedState's own save so this fires once
-  // per settled edit, not once per keystroke/tap. Also fires on theme/accent
-  // changes so a flipped Appearance preference or accent color shows up on
-  // the widget right away instead of waiting for its next natural repaint.
+  // Tells Android to redraw the widget right after an in-app edit instead
+  // of waiting on the OS's own throttled update cycle — debounced alongside
+  // usePersistedState's own save so this fires once per settled edit, not
+  // once per keystroke/tap. Also fires on theme/accent changes so a flipped
+  // Appearance preference or accent color shows up on the widget right away
+  // instead of waiting for its next natural repaint.
   const refreshTimeout = useRef(null);
   useEffect(() => {
     if (refreshTimeout.current) clearTimeout(refreshTimeout.current);
     refreshTimeout.current = setTimeout(() => {
       refreshFocusWidget().catch((e) => console.error("Barrow: failed to refresh focus widget", e));
-      if (focusNotificationEnabled === "on") {
-        refreshFocusNotification().catch((e) => console.error("Barrow: failed to refresh focus notification", e));
-      }
     }, 400);
     return () => clearTimeout(refreshTimeout.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workouts, focusNotificationEnabled, theme, accentColor]);
+  }, [workouts, theme, accentColor]);
 
-  // Pulls the notification down as soon as the preference is switched off,
-  // rather than leaving it up to whatever's showing until the next
-  // workouts change would otherwise trigger a refresh.
-  useEffect(() => {
-    if (focusNotificationEnabled !== "on") cancelFocusNotification().catch((e) => console.error("Barrow: failed to cancel focus notification", e));
-  }, [focusNotificationEnabled]);
+  // `exercises` with built-in field/setFormat overrides merged on top, so
+  // every consumer (FieldsRow, HistoryView, addSet's preset, etc.) sees
+  // edited preset metrics without needing to know the override map exists —
+  // unlike exerciseNotes, which callers deliberately look up separately.
+  const mergedExercises = useMemo(
+    () => exercises.map((e) => (!e.custom && exerciseFieldOverrides[e.id] ? { ...e, ...exerciseFieldOverrides[e.id] } : e)),
+    [exercises, exerciseFieldOverrides]
+  );
 
   const dayWorkoutsActions = useDayWorkouts({ setWorkouts, nextId });
   // Deleting the routine currently open in RoutineDetailScreen is handled
@@ -284,7 +298,7 @@ export function AppStateProvider({ children }) {
   // than this hook managing a global "selected routine" — so the web
   // hook's setSelectedRoutineId callback is a no-op here.
   const routineActions = useRoutineActions({ setRoutines, setWorkouts, setSelectedRoutineId: () => {}, workouts });
-  const exerciseActions = useExerciseActions({ setExercises });
+  const exerciseActions = useExerciseActions({ setExercises, setExerciseNotes, setExerciseFieldOverrides });
 
   // Resumes a date's most recently added workout, or starts a fresh one —
   // same rule as the web app's openDate, minus the navigation itself (the
@@ -307,12 +321,22 @@ export function AppStateProvider({ children }) {
   const cloudSync = useCloudSync({
     profile, setProfile, resetProfile,
     exercises, setExercises,
+    exerciseNotes, setExerciseNotes,
+    exerciseFieldOverrides, setExerciseFieldOverrides,
     routines, setRoutines,
     workouts, setWorkouts,
     unit, setUnit,
     activeAccountId, switchActiveAccount, localDataHydrated,
     setLastSyncedAt,
   });
+
+  const notifications = useNotifications(cloudSync.session, profile);
+  // Shared between App.js's one-time UpdateAvailableModal and ProfileView's
+  // persistent banner (see ProfileView) — a single fetch/dismiss-state
+  // rather than each mounting its own useAppVersionCheck, which would
+  // otherwise double the app_config request and could disagree with itself
+  // about which version was dismissed.
+  const appVersionCheck = useAppVersionCheck();
 
   // Wipes every logged workout, routine, and custom exercise/stretch
   // routine on this device (Profile's "Danger zone" — ConfirmActionModal
@@ -331,6 +355,8 @@ export function AppStateProvider({ children }) {
     setWorkouts({});
     setRoutines([]);
     setExercises(SEED_EXERCISES);
+    setExerciseNotes({});
+    setExerciseFieldOverrides({});
     setWorkoutTimerStartedAt(null);
   };
 
@@ -350,6 +376,8 @@ export function AppStateProvider({ children }) {
   // normal pull-on-sign-in flow — this only ever touches the local cache.
   const clearAllAccountData = async () => {
     setExercises(SEED_EXERCISES);
+    setExerciseNotes({});
+    setExerciseFieldOverrides({});
     setRoutines([]);
     setWorkouts({});
     setUnit("lb");
@@ -358,7 +386,7 @@ export function AppStateProvider({ children }) {
     setWorkoutView("focus");
     setFocusSupersetGrouping("together");
     setProfile(DEFAULT_PROFILE);
-    setFocusNotificationEnabled("off");
+    setNotificationsEnabled("off");
     setPlateCalculatorEnabled(false);
     setStretchRoutinesEnabled(false);
     setWorkoutTimerEnabled(false);
@@ -373,8 +401,10 @@ export function AppStateProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      exercises,
+      exercises: mergedExercises,
       setExercises,
+      exerciseNotes,
+      setExerciseNotes,
       routines,
       setRoutines,
       workouts,
@@ -389,8 +419,8 @@ export function AppStateProvider({ children }) {
       setWorkoutView,
       focusSupersetGrouping,
       setFocusSupersetGrouping,
-      focusNotificationEnabled,
-      setFocusNotificationEnabled,
+      notificationsEnabled,
+      setNotificationsEnabled,
       plateCalculatorEnabled,
       setPlateCalculatorEnabled,
       stretchRoutinesEnabled,
@@ -419,6 +449,8 @@ export function AppStateProvider({ children }) {
       clearWorkoutData,
       clearAllAccountData,
       cloudSync,
+      notifications,
+      appVersionCheck,
       // Which account's local cache is active (null = guest bucket) — read
       // by WorkoutTimerBadge/staleFocusPointer call sites that touch
       // barrow:focusPointer directly, outside usePersistedState, so they
@@ -426,7 +458,7 @@ export function AppStateProvider({ children }) {
       activeAccountId,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [exercises, routines, workouts, unit, theme, accentColor, workoutView, focusSupersetGrouping, focusNotificationEnabled, plateCalculatorEnabled, stretchRoutinesEnabled, workoutTimerEnabled, workoutTimerAutoOpenSummary, workoutTimerStartedAt, countdownDurationMs, countdownEndAt, countdownPausedMs, lastSyncedAt, profile, profileHydrated, cloudSync, activeAccountId]
+    [mergedExercises, exerciseNotes, routines, workouts, unit, theme, accentColor, workoutView, focusSupersetGrouping, notificationsEnabled, plateCalculatorEnabled, stretchRoutinesEnabled, workoutTimerEnabled, workoutTimerAutoOpenSummary, workoutTimerStartedAt, countdownDurationMs, countdownEndAt, countdownPausedMs, lastSyncedAt, profile, profileHydrated, cloudSync, notifications, appVersionCheck, activeAccountId]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

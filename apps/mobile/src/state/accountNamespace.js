@@ -50,7 +50,7 @@ export const ACCOUNT_DATA_KEYS = [
   "barrow:workoutView",
   "barrow:focusSupersetGrouping",
   "barrow:profile",
-  "barrow:focusNotificationEnabled",
+  "barrow:notificationsEnabled",
   "barrow:plateCalculatorEnabled",
   "barrow:stretchRoutinesEnabled",
   "barrow:workoutTimerEnabled",
@@ -60,6 +60,7 @@ export const ACCOUNT_DATA_KEYS = [
   "barrow:countdownEndAt",
   "barrow:countdownPausedMs",
   "barrow:focusPointer",
+  "barrow:widgetNav",
   "barrow:lastSyncedAt",
 ];
 

@@ -137,8 +137,8 @@ export function ExercisePicker({
         {showAddCustom && (
           <AddCustomExerciseModal
             onClose={() => setShowAddCustom(false)}
-            onSave={(name, category, muscle, fields, setFormat) => {
-              onPick(onAddCustom(name, category, muscle, fields, setFormat));
+            onSave={(name, category, muscle, fields, setFormat, hasAngles) => {
+              onPick(onAddCustom(name, category, muscle, fields, setFormat, hasAngles));
               setShowAddCustom(false);
             }}
           />

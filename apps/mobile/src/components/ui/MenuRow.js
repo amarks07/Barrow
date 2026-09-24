@@ -5,11 +5,13 @@ import { useTheme } from "../../theme/ThemeProvider";
 
 // A tappable row that drills into a sub-screen — label (+ optional
 // subtitle) on the left, chevron on the right. Used by Profile's hub screen
-// to link out to Profile settings / Biometrics.
-export function MenuRow({ label, subtitle, onPress }) {
+// to link out to Profile settings / Biometrics / Notifications. `badge`
+// (unread state) is shown by outlining the row in the accent color, same
+// as Card's `selected` treatment, rather than a separate dot.
+export function MenuRow({ label, subtitle, badge, onPress }) {
   const { tokens } = useTheme();
   return (
-    <Card style={{ padding: 14 }}>
+    <Card style={{ padding: 14 }} selected={badge}>
       <Pressable onPress={onPress} accessibilityRole="button" className="flex-row items-center justify-between">
         <View className="flex-1 pr-3">
           <Text style={{ fontSize: 15, fontWeight: "500", color: tokens.text }}>{label}</Text>
