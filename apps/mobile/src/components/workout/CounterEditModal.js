@@ -57,6 +57,18 @@ export function CounterEditModal({ title, label, value, onChangeValue, onInc, on
     closingRef.current = true;
     Animated.timing(slideAnim, { toValue: 1000, duration, useNativeDriver: true }).start(onClose);
   };
+  // The keyboardWillHide/keyboardDidHide listeners below are registered once
+  // on mount (empty deps — see that effect's own comment for why they can't
+  // just resubscribe on every render). Without this ref they'd call the
+  // `handleClose` from that first render forever, closing over that render's
+  // `onClose` (in turn closing over that render's stale field value) even
+  // after the user has since typed into the field — silently reverting a
+  // freshly-typed value on the very first edit of a blank field whenever the
+  // sheet is dismissed via back-press/interactive keyboard swipe instead of
+  // the X/backdrop (whose Pressables call handleClose fresh from JSX every
+  // render, so they never had this problem).
+  const handleCloseRef = useRef(handleClose);
+  handleCloseRef.current = handleClose;
 
   // Android blurs (and hides the keyboard for) the autoFocused Counter input
   // on essentially any touch inside this sheet — not just Pressables (see
@@ -131,7 +143,7 @@ export function CounterEditModal({ title, label, value, onChangeValue, onInc, on
       // will bring the keyboard back. Anything else (a real interactive
       // swipe, or no in-sheet touch at all, e.g. a back press) closes it.
       if (hadRecentTouch && !isInteractive) return;
-      handleClose(e.duration);
+      handleCloseRef.current(e.duration);
     });
     // Belt-and-suspenders for whatever native focus-loss Android decides to
     // trigger on its own — a tap that's neither an explicit close (X/
@@ -184,7 +196,7 @@ export function CounterEditModal({ title, label, value, onChangeValue, onInc, on
           onPressIn={() => handleClose()}
           focusable={false}
           accessibilityLabel="Close"
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.3)" }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)" }}
         />
         <Animated.View
           style={{

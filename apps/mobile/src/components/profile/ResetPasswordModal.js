@@ -23,7 +23,7 @@ export function ResetPasswordModal({ cloudSync }) {
 
   return (
     <Modal transparent animationType="fade" visible>
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.3)" }}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)" }}>
         <View
           className="p-5"
           style={{ backgroundColor: tokens.bg, borderBottomWidth: 1.5, borderBottomColor: tokens.line, paddingTop: Math.max(20, insets.top) }}

@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react-native";
-import { buildSteps, convertWeight, fmtNum, getRecommendation, getRepRange } from "@barrow/core";
+import { buildSteps, convertWeight, effectiveReps, fmtNum, getRecommendation, getRepRange } from "@barrow/core";
 import { IconBtn } from "../ui/IconBtn";
 import { Button } from "../ui/Button";
 import { SetCounters } from "./SetCounters";
@@ -44,7 +44,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, routineRepRange, 
   // First set of an entry is left blank rather than auto-filled from `rec`
   // — see DayView's WorkoutEntryRow for the matching comment.
   const prefill = lastSet
-    ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
+    ? { reps: effectiveReps(lastSet), weight: convertWeight(lastSet.weight, lastSet.unit, unit), side: lastSet.side }
     : null;
   const singleSet = isSingle ? entry.sets[0] : null;
 

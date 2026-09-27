@@ -1,4 +1,4 @@
-const APK_VERSION = "1.4.0";
+const APK_VERSION = "1.4.1";
 
 export default function Page() {
   return (

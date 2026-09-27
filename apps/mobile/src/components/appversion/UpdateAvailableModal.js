@@ -33,7 +33,7 @@ export function UpdateAvailableModal({ latestVersion, onDismiss, onDismissForeve
   return (
     <Modal transparent animationType="none" visible onRequestClose={onDismiss}>
       <Pressable
-        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)" }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.7)" }}
         onPress={onDismiss}
       />
       <Animated.View
@@ -58,7 +58,7 @@ export function UpdateAvailableModal({ latestVersion, onDismiss, onDismissForeve
             <Button label="Not now" onPress={onDismiss} size="small" />
             <Button label="Never show again" onPress={onDismissForever} size="small" />
           </View>
-          <Button label="Update" onPress={handleUpdate} variant="solid" size="medium" />
+          <Button label="Update" onPress={handleUpdate} variant="solid" size="small" />
         </View>
       </Animated.View>
     </Modal>

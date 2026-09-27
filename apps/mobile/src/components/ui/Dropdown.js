@@ -32,7 +32,7 @@ export function Dropdown({ value, options, onChange, title = "Select" }) {
         <Pressable
           onPress={() => setOpen(false)}
           accessibilityLabel="Close"
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "flex-end" }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" }}
         >
           <Pressable
             // Swallow taps on the sheet itself so they don't bubble to the

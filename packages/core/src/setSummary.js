@@ -6,7 +6,7 @@ function fieldText(key, set, unit) {
     case "weight":
       return `${fmtNum(convertWeight(set.weight, set.unit, unit))} ${unit}`;
     case "reps":
-      return `${fmtNum(set.reps)} reps`;
+      return set.side === "separate" ? `${fmtNum(set.repsLeft)} + ${fmtNum(set.repsRight)} reps` : `${fmtNum(set.reps)} reps`;
     case "time":
       return `${fmtNum(set.time)} min`;
     case "speed":

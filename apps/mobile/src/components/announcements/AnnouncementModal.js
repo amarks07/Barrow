@@ -66,7 +66,7 @@ export function AnnouncementModal({ announcement, onClose }) {
   return (
     <Modal transparent animationType="none" visible onRequestClose={onClose}>
       <Pressable
-        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)" }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.7)" }}
         onPress={onClose}
       />
       <Animated.View
@@ -87,7 +87,7 @@ export function AnnouncementModal({ announcement, onClose }) {
           <RichText message={announcement.message} style={{ fontSize: 13, color: tokens.textDim, lineHeight: 18 }} />
         </View>
         <View className="flex-row items-center justify-between">
-          <Button label={announcement.cancel_label} onPress={onClose} size="small" />
+          <Button label={announcement.cancel_label} onPress={onClose} size="medium" />
           <Button label={announcement.continue_label} onPress={handleContinue} variant="solid" size="medium" />
         </View>
       </Animated.View>

@@ -7,6 +7,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react-native";
 import {
   buildSteps,
   convertWeight,
+  effectiveReps,
   fmtNum,
   getPreviousSessionSets,
   getPreviousWarmupSets,
@@ -52,7 +53,7 @@ function ExercisePanel({ entry, ex, unit, workouts, workoutId, routineRepRange, 
   // First set of an entry is left blank rather than auto-filled from `rec`
   // — see DayView's WorkoutEntryRow for the matching comment.
   const prefill = lastSet
-    ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
+    ? { reps: effectiveReps(lastSet), weight: convertWeight(lastSet.weight, lastSet.unit, unit), side: lastSet.side }
     : null;
   const singleSet = isSingle ? entry.sets[0] : null;
   // Previous-session reference lines and the "copy warmups" preset list are

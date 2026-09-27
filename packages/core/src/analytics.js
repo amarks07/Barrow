@@ -1,6 +1,15 @@
 import { convertSpeed, convertWeight, fmtNum, roundHalf } from "./units";
 import { flattenWorkouts } from "./workouts";
 
+// A "separate" set (see SplitRepsRow) tracks reps per side instead of on the
+// plain `reps` field — updateSet never writes `reps` for one (see
+// workoutMutations.js), so every reps-based calculation below has to read
+// the total through here instead of `s.reps` directly.
+export function effectiveReps(s) {
+  if (s.side === "separate") return (parseFloat(s.repsLeft) || 0) + (parseFloat(s.repsRight) || 0);
+  return parseFloat(s.reps) || 0;
+}
+
 export function getRepRange(exerciseId, workouts, excludeWorkoutId) {
   let max = 0;
   flattenWorkouts(workouts).forEach(({ workout }) => {
@@ -8,8 +17,8 @@ export function getRepRange(exerciseId, workouts, excludeWorkoutId) {
     const entry = workout.entries.find((e) => e.exerciseId === exerciseId);
     if (!entry) return;
     entry.sets.forEach((s) => {
-      const r = parseFloat(s.reps);
-      if (!Number.isNaN(r) && r > max) max = r;
+      const r = effectiveReps(s);
+      if (r > max) max = r;
     });
   });
   const fromHistory = max > 0;
@@ -39,7 +48,7 @@ export function getRecommendation(exerciseId, workouts, unit, excludeWorkoutId, 
       .filter((s) => !s.warmup)
       .map((s) => {
         const wConv = convertWeight(s.weight, s.unit || unit, unit);
-        return { reps: parseFloat(s.reps) || 0, weight: wConv === "" ? 0 : wConv, side: s.side };
+        return { reps: effectiveReps(s), weight: wConv === "" ? 0 : wConv, side: s.side };
       })
       .filter((s) => s.reps > 0);
     if (workingSets.length === 0) continue;
@@ -96,12 +105,12 @@ export function getPreviousSessionSets(exerciseId, workouts, unit, excludeWorkou
 
     const firstSet = entry.sets[0];
     const firstWeight = convertWeight(firstSet.weight, firstSet.unit || unit, unit);
-    const first = { weight: firstWeight === "" ? 0 : firstWeight, reps: parseFloat(firstSet.reps) || 0 };
+    const first = { weight: firstWeight === "" ? 0 : firstWeight, reps: effectiveReps(firstSet) };
 
     let max = null;
     entry.sets.forEach((s) => {
       if (s.warmup) return;
-      const reps = parseFloat(s.reps) || 0;
+      const reps = effectiveReps(s);
       if (reps <= 0) return;
       const wConv = convertWeight(s.weight, s.unit || unit, unit);
       const wNum = wConv === "" ? 0 : wConv;
@@ -129,7 +138,7 @@ export function getPreviousWarmupSets(exerciseId, workouts, unit, excludeWorkout
       .filter((s) => s.warmup)
       .map((s) => ({
         weight: convertWeight(s.weight, s.unit || unit, unit),
-        reps: s.reps,
+        reps: effectiveReps(s),
         side: s.side ?? "together",
         warmup: true,
       }));
@@ -151,7 +160,7 @@ export function getVolumeSeries(exerciseId, workouts, unit) {
       if (s.warmup) return;
       const wConv = convertWeight(s.weight, s.unit, unit);
       const wNum = wConv === "" ? 0 : wConv;
-      const reps = parseFloat(s.reps) || 0;
+      const reps = effectiveReps(s);
       volume += wNum * reps;
     });
     byDate.set(dateKey, (byDate.get(dateKey) || 0) + volume);
@@ -173,7 +182,7 @@ export function getMaxWeightSeries(exerciseId, workouts, unit) {
     let dayMax = 0;
     entry.sets.forEach((s) => {
       if (s.warmup) return;
-      const reps = parseFloat(s.reps) || 0;
+      const reps = effectiveReps(s);
       if (reps <= 0) return;
       const wConv = convertWeight(s.weight, s.unit, unit);
       const wNum = wConv === "" ? 0 : wConv;
@@ -199,7 +208,7 @@ export function getEstimatedOneRepMaxSeries(exerciseId, workouts, unit) {
     let dayBest = 0;
     entry.sets.forEach((s) => {
       if (s.warmup) return;
-      const reps = parseFloat(s.reps) || 0;
+      const reps = effectiveReps(s);
       if (reps <= 0) return;
       const wConv = convertWeight(s.weight, s.unit, unit);
       const wNum = wConv === "" ? 0 : wConv;
@@ -224,7 +233,7 @@ export function getTotalRepsSeries(exerciseId, workouts) {
     let dayReps = 0;
     entry.sets.forEach((s) => {
       if (s.warmup) return;
-      dayReps += parseFloat(s.reps) || 0;
+      dayReps += effectiveReps(s);
     });
     if (dayReps <= 0) return;
     byDate.set(dateKey, (byDate.get(dateKey) || 0) + dayReps);
@@ -263,7 +272,7 @@ export function getBestSetVolumeSeries(exerciseId, workouts, unit) {
     let dayBest = 0;
     entry.sets.forEach((s) => {
       if (s.warmup) return;
-      const reps = parseFloat(s.reps) || 0;
+      const reps = effectiveReps(s);
       if (reps <= 0) return;
       const wConv = convertWeight(s.weight, s.unit, unit);
       const wNum = wConv === "" ? 0 : wConv;
@@ -293,7 +302,7 @@ export function getWeightPR(exerciseId, workouts, unit, excludeWorkoutId) {
   sessions.forEach((entry) => {
     entry.sets.forEach((s) => {
       if (s.warmup) return;
-      const reps = parseFloat(s.reps) || 0;
+      const reps = effectiveReps(s);
       if (reps <= 0) return;
       const wConv = convertWeight(s.weight, s.unit, unit);
       const wNum = wConv === "" ? 0 : wConv;
@@ -306,7 +315,7 @@ export function getWeightPR(exerciseId, workouts, unit, excludeWorkoutId) {
   sessions.forEach((entry) => {
     const count = entry.sets.filter((s) => {
       if (s.warmup) return false;
-      const reps = parseFloat(s.reps) || 0;
+      const reps = effectiveReps(s);
       if (reps <= 0) return false;
       const wConv = convertWeight(s.weight, s.unit, unit);
       return (wConv === "" ? 0 : wConv) === maxWeight;
@@ -374,7 +383,7 @@ export function getWorkoutStats(workout, workouts, exercises, unit) {
         warmupSets += 1;
         return;
       }
-      const reps = parseFloat(s.reps) || 0;
+      const reps = effectiveReps(s);
       const wConv = convertWeight(s.weight, s.unit, unit);
       const wNum = wConv === "" ? 0 : wConv;
       totalReps += reps;

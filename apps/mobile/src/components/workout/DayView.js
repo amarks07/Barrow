@@ -8,6 +8,7 @@ import { ArrowLeft, ChartColumn, Check, ChevronRight, GripVertical, X } from "lu
 import {
   convertWeight,
   dayLabel,
+  effectiveReps,
   exerciseMeta,
   fmtNum,
   getPreviousSessionSets,
@@ -709,7 +710,7 @@ export function DayView({
           // auto-filled from `rec` — only a same-session prior set (lastSet)
           // prefills the next one.
           const prefill = lastSet
-            ? { reps: lastSet.reps, weight: convertWeight(lastSet.weight, lastSet.unit, unit) }
+            ? { reps: effectiveReps(lastSet), weight: convertWeight(lastSet.weight, lastSet.unit, unit), side: lastSet.side }
             : null;
           // Previous-session "1st set"/"max set" reference lines and the
           // "copy warmups" preset list, mirroring ExerciseFocusView's

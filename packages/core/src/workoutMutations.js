@@ -68,20 +68,6 @@ export function addSet(workouts, dateKey, workoutId, exerciseId, nextId, preset,
   }));
 }
 
-// A "separate" set's left/right reps are the source of truth for the UI
-// (see SplitRepsRow), but every volume/PR/recommendation calculation in
-// analytics.js reads the single `reps` field. Keeping `reps` in sync as
-// their sum — right here, the one place both fields ever get written —
-// means those calculations (and CSV export, widgets, etc.) need no
-// special-casing for split sets at all.
-function withRepsSideSynced(s, field, value) {
-  const updated = { ...s, [field]: value };
-  if (field !== "repsLeft" && field !== "repsRight") return updated;
-  const left = parseFloat(updated.repsLeft) || 0;
-  const right = parseFloat(updated.repsRight) || 0;
-  return { ...updated, reps: left + right };
-}
-
 export function updateSet(workouts, dateKey, workoutId, exerciseId, setId, field, value, unit) {
   return updateWorkout(workouts, dateKey, workoutId, (w) => ({
     ...w,
@@ -93,7 +79,7 @@ export function updateSet(workouts, dateKey, workoutId, exerciseId, setId, field
               s.id === setId
                 ? UNIT_BEARING_FIELDS.has(field)
                   ? { ...s, [field]: value, unit }
-                  : withRepsSideSynced(s, field, value)
+                  : { ...s, [field]: value }
                 : s
             ),
           }

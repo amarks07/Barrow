@@ -15,6 +15,20 @@ import appJson from "../../app.json";
 // be the longest list; other categories are just flat string arrays.
 export const PATCH_NOTES = [
   {
+    version: "1.4.1",
+    date: "2026-09-26",
+    title: "Split-side set fixes",
+    notes: {
+      styling: [
+        "Modal backdrops are now noticeably darker, for better contrast against the sheet in front of them.",
+      ],
+      fixes: [
+        "Starting a new set after a left/right split-side set now carries over its per-side reps and side setting, instead of collapsing to a single merged reps value.",
+        "Fixed a counter field (weight, reps, etc.) occasionally reverting a freshly typed value back to what it was before, when the keyboard was dismissed by a back-press or swipe instead of tapping the field's own close button.",
+      ],
+    },
+  },
+  {
     version: "1.4.0",
     date: "2026-09-23",
     title: "Push notifications, a smarter widget, and split-side sets",
